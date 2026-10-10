@@ -1,0 +1,10 @@
+{
+  "entry": "main.typ",
+  "metadata": {
+    "author": "Manus",
+    "subtitle": "Production measurements, color tokens, variants, and usage rules",
+    "title": "Meplaniq Logo System Specification"
+  },
+  "mode": "report",
+  "theme": "report-theme.typ"
+}

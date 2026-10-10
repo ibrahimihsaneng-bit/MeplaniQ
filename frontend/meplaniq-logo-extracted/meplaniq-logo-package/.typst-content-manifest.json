@@ -1,0 +1,13 @@
+{
+  "task_kind": "new-document",
+  "output": "pdf",
+  "signals": ["logo identity specification", "brand standards"],
+  "hard_constraints": ["include measurements", "include color tokens", "include standard exports"],
+  "content_features": {
+    "code_blocks": 0,
+    "defined_terms": 8,
+    "portrait_images": 0,
+    "landscape_images": 1,
+    "tables": 6
+  }
+}
