@@ -82,3 +82,6 @@ fix.py
 create_antigravity_house.py
 create_project_antigravity.py
 modify_editor_page.py
+
+.vercel
+.env*
