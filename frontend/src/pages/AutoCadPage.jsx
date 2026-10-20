@@ -8,7 +8,14 @@ import AutoCadLayerManager from '../features/autocad/AutoCadLayerManager';
 import AutoCadPropertiesPanel from '../features/autocad/AutoCadPropertiesPanel';
 import AutoCadBlockLibrary from '../features/autocad/AutoCadBlockLibrary';
 import { useCadDraftingStore } from '../features/autocad/useCadDraftingStore';
-import { extractRoomsFromLinework, parseCadInput, dist } from '../features/autocad/cadGeometryUtils';
+import {
+  extractRoomsFromLinework,
+  parseCadInput,
+  dist,
+  rotateEntityGeometry,
+  mirrorEntityGeometry,
+  recalculateDoorGeometry
+} from '../features/autocad/cadGeometryUtils';
 import { fetchProjectById, updateProjectById, createManualProject, solveCadGeometry, exportDxf } from '../api';
 import Toast from '../Toast';
 
@@ -135,6 +142,85 @@ export default function AutoCadPage() {
     loadProject();
   }, [projectId]);
 
+  // 1.5 Quick Selection Transform Handlers
+  const handleRotateSelected = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    selectedIds.forEach(id => {
+      const ent = entities.find(e => e.id === id);
+      if (ent) {
+        const rotated = rotateEntityGeometry(ent, 90);
+        updateEntity(id, rotated);
+      }
+    });
+    appendHistory(`ROTATE: Rotated ${selectedIds.length} object(s) 90°.`);
+  }, [selectedIds, entities, updateEntity, appendHistory]);
+
+  const handleMirrorSelected = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    selectedIds.forEach(id => {
+      const ent = entities.find(e => e.id === id);
+      if (ent) {
+        const mirrored = mirrorEntityGeometry(ent, 'vertical');
+        updateEntity(id, mirrored);
+      }
+    });
+    appendHistory(`MIRROR: Mirrored ${selectedIds.length} object(s).`);
+  }, [selectedIds, entities, updateEntity, appendHistory]);
+
+  const handleDuplicateSelected = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    const newCopies = [];
+    selectedIds.forEach(id => {
+      const ent = entities.find(e => e.id === id);
+      if (ent) {
+        const clone = JSON.parse(JSON.stringify(ent));
+        delete clone.id;
+        const shift = 400;
+        if (clone.type === 'wall' && clone.centerline) {
+          clone.centerline.p1.x += shift;
+          clone.centerline.p1.y += shift;
+          clone.centerline.p2.x += shift;
+          clone.centerline.p2.y += shift;
+        } else if (clone.type === 'line' && clone.p1 && clone.p2) {
+          clone.p1.x += shift;
+          clone.p1.y += shift;
+          clone.p2.x += shift;
+          clone.p2.y += shift;
+        } else if (clone.type === 'rect' && clone.p1 && clone.p2) {
+          clone.p1.x += shift;
+          clone.p1.y += shift;
+          clone.p2.x += shift;
+          clone.p2.y += shift;
+        } else if (clone.type === 'circle' && clone.center) {
+          clone.center.x += shift;
+          clone.center.y += shift;
+        } else if (clone.x !== undefined && clone.y !== undefined) {
+          clone.x += shift;
+          clone.y += shift;
+        }
+        newCopies.push(clone);
+      }
+    });
+    if (newCopies.length > 0) {
+      addEntities(newCopies);
+      appendHistory(`COPY: Duplicated ${newCopies.length} object(s).`);
+    }
+  }, [selectedIds, entities, addEntities, appendHistory]);
+
+  const handleFlipDoorSwing = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    selectedIds.forEach(id => {
+      const ent = entities.find(e => e.id === id);
+      if (ent && ent.type === 'door') {
+        const cur = ent.swing || 'inward-left';
+        const flipped = cur.includes('left') ? cur.replace('left', 'right') : cur.replace('right', 'left');
+        const updated = recalculateDoorGeometry(ent, flipped, ent.widthMm);
+        updateEntity(id, updated);
+      }
+    });
+    appendHistory("DOOR: Flipped swing direction.");
+  }, [selectedIds, entities, updateEntity, appendHistory]);
+
   // 2. Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -168,6 +254,18 @@ export default function AutoCadPage() {
           deleteEntities(selectedIds);
           appendHistory(`Deleted ${selectedIds.length} entity/entities.`, 'normal');
         }
+      } else if (e.key.toLowerCase() === 'r' && selectedIds.length > 0) {
+        e.preventDefault();
+        handleRotateSelected();
+      } else if (e.key.toLowerCase() === 'm' && selectedIds.length > 0) {
+        e.preventDefault();
+        handleMirrorSelected();
+      } else if (e.key.toLowerCase() === 'c' && selectedIds.length > 0 && !e.ctrlKey) {
+        e.preventDefault();
+        handleDuplicateSelected();
+      } else if (e.key.toLowerCase() === 'f' && selectedIds.length > 0) {
+        e.preventDefault();
+        handleFlipDoorSwing();
       } else if (e.ctrlKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (undo()) appendHistory("UNDO", "normal");
@@ -184,7 +282,19 @@ export default function AutoCadPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settings, selectedIds, undo, redo, toggleSetting, deleteEntities, appendHistory]);
+  }, [
+    settings,
+    selectedIds,
+    undo,
+    redo,
+    toggleSetting,
+    deleteEntities,
+    handleRotateSelected,
+    handleMirrorSelected,
+    handleDuplicateSelected,
+    handleFlipDoorSwing,
+    appendHistory
+  ]);
 
   // 3. Command Line Execution Handler
   const handleExecuteCommand = useCallback((cmd) => {
@@ -574,6 +684,77 @@ export default function AutoCadPage() {
           showWallDimensions={showWallDimensions}
           containerRef={containerRef}
         />
+
+        {/* Floating Selection Quick-Action Palette */}
+        {selectedIds.length > 0 && (
+          <div style={{
+            position: 'absolute',
+            top: 14,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: 'rgba(15, 23, 42, 0.92)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid #38BDF8',
+            borderRadius: '24px',
+            padding: '4px 12px',
+            zIndex: 40,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.6)'
+          }}>
+            <span style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600, paddingRight: '4px', borderRight: '1px solid #334155' }}>
+              {selectedIds.length} Selected
+            </span>
+
+            <button
+              type="button"
+              onClick={handleRotateSelected}
+              title="Rotate 90° (R)"
+              style={{ background: '#1E293B', border: '1px solid #475569', color: '#38BDF8', padding: '4px 10px', borderRadius: '14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <span>⟳</span> Rotate
+            </button>
+
+            <button
+              type="button"
+              onClick={handleMirrorSelected}
+              title="Mirror (M)"
+              style={{ background: '#1E293B', border: '1px solid #475569', color: '#38BDF8', padding: '4px 10px', borderRadius: '14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <span>⇄</span> Mirror
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDuplicateSelected}
+              title="Duplicate (C)"
+              style={{ background: '#1E293B', border: '1px solid #475569', color: '#38BDF8', padding: '4px 10px', borderRadius: '14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <span>📋</span> Duplicate
+            </button>
+
+            {selectedEntity?.type === 'door' && (
+              <button
+                type="button"
+                onClick={handleFlipDoorSwing}
+                title="Flip Swing (F)"
+                style={{ background: '#1E293B', border: '1px solid #475569', color: '#FACC15', padding: '4px 10px', borderRadius: '14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                <span>🚪</span> Flip Swing
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => deleteEntities(selectedIds)}
+              title="Delete (Del)"
+              style={{ background: '#7F1D1D', border: '1px solid #EF4444', color: '#F8FAFC', padding: '4px 8px', borderRadius: '14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <span>🗑️</span>
+            </button>
+          </div>
+        )}
 
         {/* Floating Command Line HUD */}
         <AutoCadCommandLine
