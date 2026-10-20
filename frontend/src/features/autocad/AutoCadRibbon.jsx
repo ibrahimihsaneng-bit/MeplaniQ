@@ -133,6 +133,32 @@ export default function AutoCadRibbon({
             ↷ Redo
           </button>
 
+          {/* New / Clear Drawing */}
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("⚠️ Clear current AutoCAD drawing?\n\nThis will remove all linework and blocks from the canvas.")) {
+                onClearAll();
+              }
+            }}
+            title="Start New / Clear Canvas"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #475569',
+              color: '#F87171',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <span>🗑️</span>
+            <span>Clear</span>
+          </button>
+
           <span style={{ color: '#334155', margin: '0 4px' }}>|</span>
 
           {/* Block Library Button */}

@@ -179,3 +179,38 @@ export function snapToGrid(point, gridSizeMm = 100) {
     y: Math.round(point.y / gridSizeMm) * gridSizeMm
   };
 }
+
+/**
+ * AutoCAD-style Object Snap Tracking (AutoTrack).
+ * Detects horizontal and vertical alignment rays with existing corner vertices.
+ */
+export function findTrackingGuides(cursorMm, entities, zoom = 0.08, tolerancePx = 12) {
+  const toleranceMm = tolerancePx / zoom;
+  let trackX = null;
+  let trackY = null;
+
+  for (const ent of entities) {
+    if (ent.visible === false) continue;
+    const pts = [];
+    if (ent.type === 'wall' && ent.centerline) {
+      pts.push(ent.centerline.p1, ent.centerline.p2);
+    } else if (ent.type === 'line' && ent.p1 && ent.p2) {
+      pts.push(ent.p1, ent.p2);
+    } else if (ent.type === 'rect' && ent.p1 && ent.p2) {
+      pts.push(ent.p1, ent.p2, { x: ent.p1.x, y: ent.p2.y }, { x: ent.p2.x, y: ent.p1.y });
+    }
+
+    for (const pt of pts) {
+      if (!trackX && Math.abs(cursorMm.x - pt.x) <= toleranceMm) {
+        trackX = { x: pt.x, sourcePt: pt };
+      }
+      if (!trackY && Math.abs(cursorMm.y - pt.y) <= toleranceMm) {
+        trackY = { y: pt.y, sourcePt: pt };
+      }
+      if (trackX && trackY) break;
+    }
+    if (trackX && trackY) break;
+  }
+
+  return { trackX, trackY };
+}

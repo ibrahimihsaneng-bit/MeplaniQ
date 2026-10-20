@@ -16,6 +16,7 @@ import {
 } from './cadGeometryUtils';
 import {
   findSnapTarget,
+  findTrackingGuides,
   applyOrthoConstraint,
   applyPolarConstraint,
   snapToGrid,
@@ -61,6 +62,7 @@ export default function AutoCadCanvas({
 
   // Object snapping state
   const [activeSnap, setActiveSnap] = useState(null);
+  const [trackingGuides, setTrackingGuides] = useState({ trackX: null, trackY: null });
 
   // Selection box state (drag on empty space)
   const [selectionBox, setSelectionBox] = useState(null);
@@ -315,6 +317,15 @@ export default function AutoCadCanvas({
         target = { ...foundSnap.point };
       }
     }
+
+    // AutoTrack Object Snap Alignment Tracking Guides
+    let guides = { trackX: null, trackY: null };
+    if (settings.osnap && !foundSnap && (draftState?.p1 || activeTool === 'wall' || activeTool === 'line')) {
+      guides = findTrackingGuides(target, entities, zoom, 14);
+      if (guides.trackX) target.x = guides.trackX.x;
+      if (guides.trackY) target.y = guides.trackY.y;
+    }
+    setTrackingGuides(guides);
 
     if (!foundSnap && draftState?.p1) {
       if (settings.ortho) {
@@ -816,6 +827,32 @@ export default function AutoCadCanvas({
           <line x1="0" y1="-100000" x2="0" y2="100000" stroke="rgba(34, 197, 94, 0.45)" strokeWidth={1.2 / zoom} />
           <circle cx="0" cy="0" r={4 / zoom} fill="#EF4444" />
 
+          {/* AUTOTRACK OBJECT SNAP ALIGNMENT GUIDE RAYS */}
+          {trackingGuides.trackX && (
+            <line
+              x1={trackingGuides.trackX.x}
+              y1="-100000"
+              x2={trackingGuides.trackX.x}
+              y2="100000"
+              stroke="#22C55E"
+              strokeWidth={1.2 / zoom}
+              strokeDasharray={`${8 / zoom} ${6 / zoom}`}
+              opacity={0.7}
+            />
+          )}
+          {trackingGuides.trackY && (
+            <line
+              x1="-100000"
+              y1={trackingGuides.trackY.y}
+              x2="100000"
+              y2={trackingGuides.trackY.y}
+              stroke="#22C55E"
+              strokeWidth={1.2 / zoom}
+              strokeDasharray={`${8 / zoom} ${6 / zoom}`}
+              opacity={0.7}
+            />
+          )}
+
           {/* LIVE DETECTED CLOSED ROOMS (FLOOR FILL & LIVE AREA BADGE) */}
           {detectedRooms.map((room, idx) => {
             if (!room.points || room.points.length < 3) return null;
@@ -889,7 +926,7 @@ export default function AutoCadCanvas({
           })}
 
           {/* 1. SEAMLESS MITERED ARCHITECTURAL WALLS */}
-          {miteredWalls.map(wall => {
+          {miteredWalls.map((wall, wIdx) => {
             const isSelected = selectedIds.includes(wall.id);
             const wallColor = isSelected ? '#FACC15' : (wall.color || '#38BDF8');
             const strokeW = (isSelected ? 2.2 : 1.8) / zoom;
@@ -899,7 +936,7 @@ export default function AutoCadCanvas({
             const p0 = poly[0], p1 = poly[1], p2 = poly[2], p3 = poly[3];
 
             return (
-              <g key={wall.id} opacity={wall.visible === false ? 0 : 1}>
+              <g key={wall.id || `wall-${wIdx}`} opacity={wall.visible === false ? 0 : 1}>
                 <polygon
                   points={`${p0.x},${p0.y} ${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`}
                   fill={isSelected ? "rgba(250, 204, 21, 0.25)" : "rgba(56, 189, 248, 0.14)"}
@@ -983,14 +1020,15 @@ export default function AutoCadCanvas({
           })}
 
           {/* 2. OTHER COMMITTED ENTITIES */}
-          {otherEntities.map(ent => {
+          {otherEntities.map((ent, eIdx) => {
+            const entKey = ent.id || `cad-ent-${eIdx}`;
             const isSelected = selectedIds.includes(ent.id);
             const entColor = isSelected ? '#FACC15' : (ent.color || '#FFFFFF');
             const strokeW = (isSelected ? 2.5 : 1.5) / zoom;
 
             if (ent.type === 'line' && ent.p1 && ent.p2) {
               return (
-                <g key={ent.id}>
+                <g key={entKey}>
                   <line x1={ent.p1.x} y1={ent.p1.y} x2={ent.p2.x} y2={ent.p2.y} stroke={entColor} strokeWidth={strokeW} strokeLinecap="round" />
                   {isSelected && (
                     <>
@@ -1004,7 +1042,7 @@ export default function AutoCadCanvas({
 
             if (ent.type === 'door' && ent.hingePt && ent.strikePt) {
               return (
-                <g key={ent.id} className="cad-door-entity">
+                <g key={entKey} className="cad-door-entity">
                   <circle cx={ent.hingePt.x} cy={ent.hingePt.y} r={12 / zoom} fill="#EAB308" />
                   <circle cx={ent.strikePt.x} cy={ent.strikePt.y} r={12 / zoom} fill="#EAB308" />
                   <line x1={ent.hingePt.x} y1={ent.hingePt.y} x2={ent.leafEnd.x} y2={ent.leafEnd.y} stroke="#FACC15" strokeWidth={2.5 / zoom} />
@@ -1015,7 +1053,7 @@ export default function AutoCadCanvas({
 
             if (ent.type === 'window' && ent.startPt && ent.endPt) {
               return (
-                <g key={ent.id} className="cad-window-entity">
+                <g key={entKey} className="cad-window-entity">
                   <line x1={ent.startPt.x} y1={ent.startPt.y} x2={ent.endPt.x} y2={ent.endPt.y} stroke="#34D399" strokeWidth={3 / zoom} />
                   <line x1={ent.startPt.x} y1={ent.startPt.y} x2={ent.endPt.x} y2={ent.endPt.y} stroke="#6EE7B7" strokeWidth={1.5 / zoom} />
                   <circle cx={ent.startPt.x} cy={ent.startPt.y} r={10 / zoom} fill="#059669" />
@@ -1030,13 +1068,13 @@ export default function AutoCadCanvas({
               const rw = Math.abs(ent.p2.x - ent.p1.x);
               const rh = Math.abs(ent.p2.y - ent.p1.y);
               return (
-                <rect key={ent.id} x={rx} y={ry} width={rw} height={rh} fill={isSelected ? "rgba(250, 204, 21, 0.2)" : "none"} stroke={entColor} strokeWidth={strokeW} />
+                <rect key={entKey} x={rx} y={ry} width={rw} height={rh} fill={isSelected ? "rgba(250, 204, 21, 0.2)" : "none"} stroke={entColor} strokeWidth={strokeW} />
               );
             }
 
             if (ent.type === 'circle' && ent.center && ent.radius) {
               return (
-                <circle key={ent.id} cx={ent.center.x} cy={ent.center.y} r={ent.radius} fill={isSelected ? "rgba(250, 204, 21, 0.2)" : "none"} stroke={entColor} strokeWidth={strokeW} />
+                <circle key={entKey} cx={ent.center.x} cy={ent.center.y} r={ent.radius} fill={isSelected ? "rgba(250, 204, 21, 0.2)" : "none"} stroke={entColor} strokeWidth={strokeW} />
               );
             }
 
@@ -1045,7 +1083,7 @@ export default function AutoCadCanvas({
               const mid = { x: (ent.p1.x + ent.p2.x) / 2, y: (ent.p1.y + ent.p2.y) / 2 };
               const tickLen = 8 / zoom;
               return (
-                <g key={ent.id} className="cad-dimension">
+                <g key={entKey} className="cad-dimension">
                   {/* Dimension line */}
                   <line x1={ent.p1.x} y1={ent.p1.y} x2={ent.p2.x} y2={ent.p2.y} stroke="#38BDF8" strokeWidth={1.4 / zoom} />
                   {/* 45-degree Architectural Ticks */}
@@ -1081,7 +1119,7 @@ export default function AutoCadCanvas({
 
             if (ent.type === 'text' && ent.text) {
               return (
-                <g key={ent.id} transform={`translate(${ent.x}, ${ent.y}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                <g key={entKey} transform={`translate(${ent.x}, ${ent.y}) scale(${1 / zoom}, ${-1 / zoom})`}>
                   <text x="0" y="0" fill={isSelected ? "#FACC15" : (ent.color || "#FFFFFF")} fontSize={(ent.fontSize || 250) * zoom * 0.08} fontWeight="700">
                     {ent.text}
                   </text>
@@ -1090,7 +1128,7 @@ export default function AutoCadCanvas({
             }
 
             if (ent.type === 'block') {
-              return renderCadBlock(ent, isSelected, zoom);
+              return <g key={entKey}>{renderCadBlock(ent, isSelected, zoom)}</g>;
             }
 
             return null;

@@ -367,7 +367,34 @@ export default function AutoCadPage() {
       case 'O':
       case 'OFFSET':
         setActiveTool('offset');
-        appendHistory("OFFSET Specify offset distance:");
+        appendHistory("OFFSET Specify offset distance (click line to offset):");
+        break;
+
+      case 'RO':
+      case 'ROTATE':
+        setActiveTool('rotate');
+        appendHistory("ROTATE Specify base point and rotation angle:");
+        break;
+
+      case 'MI':
+      case 'MIRROR':
+        setActiveTool('mirror');
+        appendHistory("MIRROR Specify first point of mirror line:");
+        break;
+
+      case 'CO':
+      case 'CP':
+      case 'COPY':
+        setActiveTool('copy');
+        appendHistory("COPY Specify base point to copy entities:");
+        break;
+
+      case 'NEW':
+      case 'QNEW':
+        if (window.confirm("⚠️ Clear current AutoCAD drawing?\n\nThis will remove all linework and blocks.")) {
+          clearAll();
+          appendHistory("NEW Clean drawing session created.");
+        }
         break;
 
       case 'TR':

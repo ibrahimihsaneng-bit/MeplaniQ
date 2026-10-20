@@ -88,7 +88,11 @@ export function useCadDraftingStore(initialEntities = []) {
   const addEntities = useCallback((newEntitiesList) => {
     setEntitiesInternal(prev => {
       pushSnapshot(prev);
-      return [...prev, ...newEntitiesList];
+      const sanitized = (newEntitiesList || []).map((ent, idx) => ({
+        ...ent,
+        id: ent.id || `ent-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`
+      }));
+      return [...prev, ...sanitized];
     });
   }, [pushSnapshot]);
 
