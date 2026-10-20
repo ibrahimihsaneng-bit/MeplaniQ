@@ -305,6 +305,27 @@ export function createDoorOnWall(wall, clickPt, widthMm = 900, swing = 'inward-l
   return door;
 }
 
+export function recalculateDoorGeometry(door, newSwing = null, newWidth = null) {
+  if (!door || !door.hingePt || !door.strikePt) return door;
+  const swing = newSwing || door.swing || 'inward-left';
+  const widthMm = newWidth || door.widthMm || Math.round(dist(door.hingePt, door.strikePt));
+  const wallAngle = angleDeg(door.hingePt, door.strikePt);
+  const isLeft = swing.includes('left');
+  const isOutward = swing.includes('outward');
+  const swingAngle = wallAngle + (isOutward ? (isLeft ? 90 : -90) : (isLeft ? -90 : 90));
+  const leafEnd = pointFromPolar(door.hingePt, widthMm, swingAngle);
+  const arcSweep = isOutward ? (isLeft ? 1 : 0) : (isLeft ? 0 : 1);
+  const arcPath = `M ${door.strikePt.x} ${door.strikePt.y} A ${widthMm} ${widthMm} 0 0 ${arcSweep} ${leafEnd.x} ${leafEnd.y}`;
+
+  return {
+    ...door,
+    swing,
+    widthMm,
+    leafEnd,
+    arcPath
+  };
+}
+
 /**
  * Creates an architectural Window on a wall.
  */
@@ -536,4 +557,117 @@ export function parseCadInput(inputStr, referencePoint = { x: 0, y: 0 }, default
   }
 
   return null;
+}
+
+export function rotatePoint(pt, center, angleDegrees) {
+  if (!pt || !center) return pt ? { ...pt } : { x: 0, y: 0 };
+  const rad = (angleDegrees * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = pt.x - center.x;
+  const dy = pt.y - center.y;
+  return {
+    x: Math.round(center.x + dx * cos - dy * sin),
+    y: Math.round(center.y + dx * sin + dy * cos)
+  };
+}
+
+export function getEntityCenter(ent) {
+  if (!ent) return { x: 0, y: 0 };
+  if (ent.type === 'wall' && ent.centerline) {
+    return {
+      x: Math.round((ent.centerline.p1.x + ent.centerline.p2.x) / 2),
+      y: Math.round((ent.centerline.p1.y + ent.centerline.p2.y) / 2)
+    };
+  }
+  if (ent.type === 'line' && ent.p1 && ent.p2) {
+    return {
+      x: Math.round((ent.p1.x + ent.p2.x) / 2),
+      y: Math.round((ent.p1.y + ent.p2.y) / 2)
+    };
+  }
+  if (ent.type === 'rect' && ent.p1 && ent.p2) {
+    return {
+      x: Math.round((ent.p1.x + ent.p2.x) / 2),
+      y: Math.round((ent.p1.y + ent.p2.y) / 2)
+    };
+  }
+  if (ent.type === 'circle' && ent.center) {
+    return { ...ent.center };
+  }
+  if (ent.type === 'block' || ent.type === 'text') {
+    return { x: ent.x || 0, y: ent.y || 0 };
+  }
+  return { x: 0, y: 0 };
+}
+
+export function rotateEntityGeometry(ent, angleDegrees = 90, customCenter = null) {
+  const center = customCenter || getEntityCenter(ent);
+  const updated = { ...ent };
+
+  if (ent.type === 'wall' && ent.centerline) {
+    updated.centerline = {
+      p1: rotatePoint(ent.centerline.p1, center, angleDegrees),
+      p2: rotatePoint(ent.centerline.p2, center, angleDegrees)
+    };
+  } else if (ent.type === 'line' && ent.p1 && ent.p2) {
+    updated.p1 = rotatePoint(ent.p1, center, angleDegrees);
+    updated.p2 = rotatePoint(ent.p2, center, angleDegrees);
+  } else if (ent.type === 'rect' && ent.p1 && ent.p2) {
+    const p1Rot = rotatePoint(ent.p1, center, angleDegrees);
+    const p2Rot = rotatePoint(ent.p2, center, angleDegrees);
+    updated.p1 = p1Rot;
+    updated.p2 = p2Rot;
+  } else if (ent.type === 'circle' && ent.center) {
+    updated.center = rotatePoint(ent.center, center, angleDegrees);
+  } else if (ent.type === 'block') {
+    const newPos = rotatePoint({ x: ent.x, y: ent.y }, center, angleDegrees);
+    updated.x = newPos.x;
+    updated.y = newPos.y;
+    updated.rotation = ((ent.rotation || 0) + angleDegrees) % 360;
+  } else if (ent.type === 'text') {
+    const newPos = rotatePoint({ x: ent.x, y: ent.y }, center, angleDegrees);
+    updated.x = newPos.x;
+    updated.y = newPos.y;
+    updated.rotation = ((ent.rotation || 0) + angleDegrees) % 360;
+  }
+  return updated;
+}
+
+export function mirrorEntityGeometry(ent, axis = 'horizontal', customCenter = null) {
+  const center = customCenter || getEntityCenter(ent);
+  const updated = { ...ent };
+
+  const mirrorPt = (pt) => {
+    if (!pt) return pt;
+    if (axis === 'horizontal') {
+      return { x: pt.x, y: Math.round(2 * center.y - pt.y) };
+    }
+    return { x: Math.round(2 * center.x - pt.x), y: pt.y };
+  };
+
+  if (ent.type === 'wall' && ent.centerline) {
+    updated.centerline = {
+      p1: mirrorPt(ent.centerline.p1),
+      p2: mirrorPt(ent.centerline.p2)
+    };
+  } else if (ent.type === 'line' && ent.p1 && ent.p2) {
+    updated.p1 = mirrorPt(ent.p1);
+    updated.p2 = mirrorPt(ent.p2);
+  } else if (ent.type === 'rect' && ent.p1 && ent.p2) {
+    updated.p1 = mirrorPt(ent.p1);
+    updated.p2 = mirrorPt(ent.p2);
+  } else if (ent.type === 'circle' && ent.center) {
+    updated.center = mirrorPt(ent.center);
+  } else if (ent.type === 'block') {
+    const newPos = mirrorPt({ x: ent.x, y: ent.y });
+    updated.x = newPos.x;
+    updated.y = newPos.y;
+    updated.rotation = (360 - (ent.rotation || 0)) % 360;
+  } else if (ent.type === 'text') {
+    const newPos = mirrorPt({ x: ent.x, y: ent.y });
+    updated.x = newPos.x;
+    updated.y = newPos.y;
+  }
+  return updated;
 }

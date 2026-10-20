@@ -7,7 +7,12 @@ import {
   calculateMiteredWallNetwork,
   createDoorOnWall,
   createWindowOnWall,
-  filletLineSegments
+  filletLineSegments,
+  rotateEntityGeometry,
+  mirrorEntityGeometry,
+  getEntityCenter,
+  offsetSegment,
+  extractRoomsFromLinework
 } from './cadGeometryUtils';
 import {
   findSnapTarget,
@@ -16,6 +21,7 @@ import {
   snapToGrid,
   SNAP_TYPES
 } from './cadSnapping';
+import { renderCadBlock } from './renderCadBlock';
 
 export default function AutoCadCanvas({
   entities = [],
@@ -72,6 +78,17 @@ export default function AutoCadCanvas({
   const walls = useMemo(() => entities.filter(e => e.type === 'wall'), [entities]);
   const otherEntities = useMemo(() => entities.filter(e => e.type !== 'wall'), [entities]);
   const miteredWalls = useMemo(() => calculateMiteredWallNetwork(walls, 70), [walls]);
+
+  // Live real-time closed-room boundary detection and area calculation
+  const detectedRooms = useMemo(() => {
+    if (walls.length < 3) return [];
+    try {
+      const res = extractRoomsFromLinework(entities, 80);
+      return res.rooms || [];
+    } catch {
+      return [];
+    }
+  }, [entities, walls]);
 
   // NATIVE SVG MATRIX COORDINATE PROJECTION (100.0% Sub-pixel precision)
   const getEventWorldCoords = useCallback((e) => {
@@ -473,6 +490,118 @@ export default function AutoCadCanvas({
       return;
     }
 
+    // 5.5 ROTATE TOOL
+    if (activeTool === 'rotate') {
+      const hitRotate = hitTestEntity(pt, entities, Math.max(120, 18 / zoom));
+      const targetIds = selectedIds.length > 0 ? selectedIds : (hitRotate ? [hitRotate.entity.id] : []);
+      if (targetIds.length > 0) {
+        targetIds.forEach(id => {
+          const ent = entities.find(e => e.id === id);
+          if (ent) {
+            const rotated = rotateEntityGeometry(ent, 90);
+            onUpdateEntity(id, rotated);
+          }
+        });
+        onPromptUpdate && onPromptUpdate(`ROTATE: Rotated ${targetIds.length} object(s) 90°.`);
+      } else {
+        onPromptUpdate && onPromptUpdate("ROTATE: Click an entity to rotate 90°.");
+      }
+      return;
+    }
+
+    // 5.6 MIRROR TOOL
+    if (activeTool === 'mirror') {
+      const hitMirror = hitTestEntity(pt, entities, Math.max(120, 18 / zoom));
+      const targetIds = selectedIds.length > 0 ? selectedIds : (hitMirror ? [hitMirror.entity.id] : []);
+      if (targetIds.length > 0) {
+        targetIds.forEach(id => {
+          const ent = entities.find(e => e.id === id);
+          if (ent) {
+            const mirrored = mirrorEntityGeometry(ent, 'vertical');
+            onUpdateEntity(id, mirrored);
+          }
+        });
+        onPromptUpdate && onPromptUpdate(`MIRROR: Mirrored ${targetIds.length} object(s).`);
+      } else {
+        onPromptUpdate && onPromptUpdate("MIRROR: Click an entity to mirror across axis.");
+      }
+      return;
+    }
+
+    // 5.7 COPY TOOL
+    if (activeTool === 'copy') {
+      const hitCopy = hitTestEntity(pt, entities, Math.max(120, 18 / zoom));
+      const targetIds = selectedIds.length > 0 ? selectedIds : (hitCopy ? [hitCopy.entity.id] : []);
+      if (targetIds.length > 0) {
+        targetIds.forEach(id => {
+          const ent = entities.find(e => e.id === id);
+          if (ent) {
+            const clone = JSON.parse(JSON.stringify(ent));
+            delete clone.id;
+            const shift = 400;
+            if (clone.type === 'wall' && clone.centerline) {
+              clone.centerline.p1.x += shift;
+              clone.centerline.p1.y += shift;
+              clone.centerline.p2.x += shift;
+              clone.centerline.p2.y += shift;
+            } else if (clone.type === 'line' && clone.p1 && clone.p2) {
+              clone.p1.x += shift;
+              clone.p1.y += shift;
+              clone.p2.x += shift;
+              clone.p2.y += shift;
+            } else if (clone.type === 'rect' && clone.p1 && clone.p2) {
+              clone.p1.x += shift;
+              clone.p1.y += shift;
+              clone.p2.x += shift;
+              clone.p2.y += shift;
+            } else if (clone.type === 'circle' && clone.center) {
+              clone.center.x += shift;
+              clone.center.y += shift;
+            } else if (clone.x !== undefined && clone.y !== undefined) {
+              clone.x += shift;
+              clone.y += shift;
+            }
+            onAddEntity(clone);
+          }
+        });
+        onPromptUpdate && onPromptUpdate(`COPY: Cloned ${targetIds.length} object(s).`);
+      } else {
+        onPromptUpdate && onPromptUpdate("COPY: Click an entity to duplicate.");
+      }
+      return;
+    }
+
+    // 5.8 OFFSET TOOL
+    if (activeTool === 'offset') {
+      const hitOffset = hitTestEntity(pt, entities, Math.max(120, 18 / zoom));
+      if (hitOffset) {
+        const ent = hitOffset.entity;
+        const offsetDist = settings?.wallThickness || 150;
+        if (ent.type === 'wall' && ent.centerline) {
+          const off = offsetSegment(ent.centerline.p1, ent.centerline.p2, offsetDist, 1);
+          onAddEntity({
+            type: 'wall',
+            centerline: off,
+            thickness: ent.thickness || 150,
+            layer: ent.layer || 'A-WALL'
+          });
+          onPromptUpdate && onPromptUpdate(`OFFSET: Parallel wall created with ${offsetDist} mm offset.`);
+        } else if (ent.type === 'line' && ent.p1 && ent.p2) {
+          const off = offsetSegment(ent.p1, ent.p2, offsetDist, 1);
+          onAddEntity({
+            type: 'line',
+            p1: off.p1,
+            p2: off.p2,
+            layer: ent.layer || activeLayerId
+          });
+          onPromptUpdate && onPromptUpdate(`OFFSET: Parallel line created with ${offsetDist} mm offset.`);
+        }
+      } else {
+        onPromptUpdate && onPromptUpdate("OFFSET: Click a line or wall to offset.");
+      }
+      return;
+    }
+
     // 6. CHECK FOR DRAGGING EXISTING ENTITY OR GRIP HANDLE
     // (Prevents accidental wild 13m segments when user clicks an existing wall!)
     const hit = hitTestEntity(pt, entities, Math.max(120, 18 / zoom));
@@ -687,6 +816,61 @@ export default function AutoCadCanvas({
           <line x1="0" y1="-100000" x2="0" y2="100000" stroke="rgba(34, 197, 94, 0.45)" strokeWidth={1.2 / zoom} />
           <circle cx="0" cy="0" r={4 / zoom} fill="#EF4444" />
 
+          {/* LIVE DETECTED CLOSED ROOMS (FLOOR FILL & LIVE AREA BADGE) */}
+          {detectedRooms.map((room, idx) => {
+            if (!room.points || room.points.length < 3) return null;
+            const ptsStr = room.points.map(pt => `${pt[0]},${pt[1]}`).join(' ');
+            const cx = Math.round(room.points.reduce((acc, p) => acc + p[0], 0) / room.points.length);
+            const cy = Math.round(room.points.reduce((acc, p) => acc + p[1], 0) / room.points.length);
+
+            return (
+              <g key={`detected-room-${idx}`} className="cad-detected-room">
+                <polygon
+                  points={ptsStr}
+                  fill="rgba(56, 189, 248, 0.05)"
+                  stroke="rgba(56, 189, 248, 0.25)"
+                  strokeWidth={1.2 / zoom}
+                  strokeDasharray={`${8 / zoom} ${6 / zoom}`}
+                />
+                <g transform={`translate(${cx}, ${cy}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                  <rect
+                    x="-50"
+                    y="-16"
+                    width="100"
+                    height="32"
+                    rx="6"
+                    fill="#0F172A"
+                    fillOpacity="0.88"
+                    stroke="#38BDF8"
+                    strokeWidth="1.2"
+                  />
+                  <text
+                    x="0"
+                    y="-2"
+                    textAnchor="middle"
+                    fill="#F8FAFC"
+                    fontSize="10"
+                    fontWeight="800"
+                    letterSpacing="0.05em"
+                  >
+                    ROOM {idx + 1}
+                  </text>
+                  <text
+                    x="0"
+                    y="11"
+                    textAnchor="middle"
+                    fill="#38BDF8"
+                    fontSize="9.5"
+                    fontWeight="700"
+                    fontFamily="monospace"
+                  >
+                    {room.carpet_area_sqm} m²
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+
           {/* 1. SEAMLESS MITERED ARCHITECTURAL WALLS */}
           {miteredWalls.map(wall => {
             const isSelected = selectedIds.includes(wall.id);
@@ -868,17 +1052,7 @@ export default function AutoCadCanvas({
             }
 
             if (ent.type === 'block') {
-              const bw = ent.width || 1000;
-              const bh = ent.height || 1000;
-              return (
-                <g key={ent.id} transform={`translate(${ent.x - bw / 2}, ${ent.y - bh / 2})`}>
-                  <rect width={bw} height={bh} rx={20 / zoom} fill={isSelected ? "rgba(250, 204, 21, 0.25)" : "rgba(99, 102, 241, 0.15)"} stroke={isSelected ? "#FACC15" : "#818CF8"} strokeWidth={1.8 / zoom} />
-                  <g transform={`translate(${bw / 2}, ${bh / 2}) scale(${1 / zoom}, ${-1 / zoom})`}>
-                    <text x="0" y="-8" textAnchor="middle" fontSize="18" fill="#FFFFFF">{ent.icon || '📦'}</text>
-                    <text x="0" y="10" textAnchor="middle" fontSize="9" fontWeight="700" fill="#CBD5E1">{ent.name}</text>
-                  </g>
-                </g>
-              );
+              return renderCadBlock(ent, isSelected, zoom);
             }
 
             return null;
@@ -908,29 +1082,49 @@ export default function AutoCadCanvas({
                   strokeDasharray={`${8 / zoom} ${4 / zoom}`}
                 />
               )}
+              {/* Dynamic Distance & Angle HUD Badge */}
+              {dist(draftState.p1, worldCursor) > 20 && (
+                <g transform={`translate(${(draftState.p1.x + worldCursor.x) / 2}, ${(draftState.p1.y + worldCursor.y) / 2}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                  <rect
+                    x="-65"
+                    y="-14"
+                    width="130"
+                    height="24"
+                    rx="5"
+                    fill="#020617"
+                    fillOpacity="0.9"
+                    stroke="#38BDF8"
+                    strokeWidth="1.2"
+                  />
+                  <text
+                    x="0"
+                    y="3"
+                    textAnchor="middle"
+                    fill="#38BDF8"
+                    fontSize="10.5"
+                    fontWeight="700"
+                    fontFamily="monospace"
+                  >
+                    {Math.round(dist(draftState.p1, worldCursor))} mm | {Math.round(angleDeg(draftState.p1, worldCursor))}°
+                  </text>
+                </g>
+              )}
             </g>
           )}
 
           {/* BLOCK PLACEMENT PREVIEW */}
           {activeBlockToPlace && (
-            <g
-              className="cad-block-placement-preview"
-              transform={`translate(${worldCursor.x - activeBlockToPlace.width / 2}, ${worldCursor.y - activeBlockToPlace.height / 2})`}
-              opacity={0.7}
-            >
-              <rect
-                width={activeBlockToPlace.width}
-                height={activeBlockToPlace.height}
-                rx={20 / zoom}
-                fill="rgba(56, 189, 248, 0.2)"
-                stroke="#38BDF8"
-                strokeWidth={1.8 / zoom}
-                strokeDasharray={`${8 / zoom} ${4 / zoom}`}
-              />
-              <g transform={`translate(${activeBlockToPlace.width / 2}, ${activeBlockToPlace.height / 2}) scale(${1 / zoom}, ${-1 / zoom})`}>
-                <text x="0" y="-8" textAnchor="middle" fontSize="18" fill="#FFFFFF">{activeBlockToPlace.icon || '📦'}</text>
-                <text x="0" y="10" textAnchor="middle" fontSize="9" fontWeight="700" fill="#38BDF8">Click to place</text>
-              </g>
+            <g className="cad-block-placement-preview" opacity={0.75} style={{ pointerEvents: 'none' }}>
+              {renderCadBlock({
+                id: 'preview',
+                blockId: activeBlockToPlace.id,
+                name: activeBlockToPlace.name,
+                x: worldCursor.x,
+                y: worldCursor.y,
+                width: activeBlockToPlace.width,
+                height: activeBlockToPlace.height,
+                rotation: 0
+              }, false, zoom)}
             </g>
           )}
 

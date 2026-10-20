@@ -453,6 +453,67 @@ export default function AutoCadPage() {
     }
   };
 
+  const handleExportSvg = () => {
+    try {
+      const svgElem = document.querySelector('.autocad-page-container svg');
+      if (!svgElem) {
+        showToast("No active drafting viewport found.", "error");
+        return;
+      }
+      const serializer = new XMLSerializer();
+      const svgStr = serializer.serializeToString(svgElem);
+      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${projectName || 'AutoCAD_Plan'}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("Vector SVG exported successfully!", "success");
+      appendHistory("Exported vector SVG file.", "info");
+    } catch (err) {
+      showToast(`SVG export failed: ${err.message}`, "error");
+    }
+  };
+
+  const handleExportPng = () => {
+    try {
+      const svgElem = document.querySelector('.autocad-page-container svg');
+      if (!svgElem) {
+        showToast("No active drafting viewport found.", "error");
+        return;
+      }
+      const serializer = new XMLSerializer();
+      const svgStr = serializer.serializeToString(svgElem);
+      const img = new Image();
+      const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+      img.onload = () => {
+        const cvs = document.createElement('canvas');
+        cvs.width = Math.max(1600, (svgElem.clientWidth || 800) * 2);
+        cvs.height = Math.max(1200, (svgElem.clientHeight || 600) * 2);
+        const ctx = cvs.getContext('2d');
+        ctx.fillStyle = '#0A0E17';
+        ctx.fillRect(0, 0, cvs.width, cvs.height);
+        ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+        URL.revokeObjectURL(url);
+        const a = document.createElement('a');
+        a.href = cvs.toDataURL('image/png');
+        a.download = `${projectName || 'AutoCAD_Plan'}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast("High-Res PNG snapshot exported!", "success");
+        appendHistory("Exported high-res PNG image.", "info");
+      };
+      img.src = url;
+    } catch (err) {
+      showToast(`PNG export failed: ${err.message}`, "error");
+    }
+  };
+
   return (
     <div className="autocad-page-container" style={{
       display: 'flex',
@@ -485,6 +546,8 @@ export default function AutoCadPage() {
         onConvertToBim={handleConvertToBim}
         onSaveProject={handleSaveProject}
         onExportDxf={handleExportDxf}
+        onExportSvg={handleExportSvg}
+        onExportPng={handleExportPng}
         onClearAll={clearAll}
         isConverting={isConverting}
       />

@@ -21,6 +21,8 @@ export default function AutoCadRibbon({
   onConvertToBim,
   onSaveProject,
   onExportDxf,
+  onExportSvg,
+  onExportPng,
   onClearAll,
   isConverting = false
 }) {
@@ -209,7 +211,41 @@ export default function AutoCadRibbon({
               fontWeight: 600
             }}
           >
-            Export DXF
+            DXF
+          </button>
+
+          <button
+            type="button"
+            onClick={onExportSvg}
+            title="Export Scalable Vector SVG"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #334155',
+              color: '#38BDF8',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            SVG
+          </button>
+
+          <button
+            type="button"
+            onClick={onExportPng}
+            title="Export High-Resolution PNG"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #334155',
+              color: '#38BDF8',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            PNG
           </button>
 
           <button

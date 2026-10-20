@@ -1,5 +1,5 @@
 import React from 'react';
-import { dist, angleDeg } from './cadGeometryUtils';
+import { dist, angleDeg, recalculateDoorGeometry } from './cadGeometryUtils';
 
 export default function AutoCadPropertiesPanel({
   selectedEntity,
@@ -141,7 +141,11 @@ export default function AutoCadPropertiesPanel({
               </label>
               <select
                 value={selectedEntity.widthMm || 900}
-                onChange={(e) => onUpdateEntity(selectedEntity.id, { widthMm: Number(e.target.value) })}
+                onChange={(e) => {
+                  const newW = Number(e.target.value);
+                  const updated = recalculateDoorGeometry(selectedEntity, selectedEntity.swing, newW);
+                  onUpdateEntity(selectedEntity.id, updated);
+                }}
                 style={{ width: '100%', background: '#1E293B', border: '1px solid #334155', color: '#F8FAFC', padding: '5px', borderRadius: '4px' }}
               >
                 <option value={750}>750 mm (Bathroom Door)</option>
@@ -157,7 +161,11 @@ export default function AutoCadPropertiesPanel({
               </label>
               <select
                 value={selectedEntity.swing || 'inward-left'}
-                onChange={(e) => onUpdateEntity(selectedEntity.id, { swing: e.target.value })}
+                onChange={(e) => {
+                  const newSwing = e.target.value;
+                  const updated = recalculateDoorGeometry(selectedEntity, newSwing, selectedEntity.widthMm);
+                  onUpdateEntity(selectedEntity.id, updated);
+                }}
                 style={{ width: '100%', background: '#1E293B', border: '1px solid #334155', color: '#F8FAFC', padding: '5px', borderRadius: '4px' }}
               >
                 <option value="inward-left">Inward - Left Swing</option>
@@ -165,6 +173,53 @@ export default function AutoCadPropertiesPanel({
                 <option value="outward-left">Outward - Left Swing</option>
                 <option value="outward-right">Outward - Right Swing</option>
               </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const cur = selectedEntity.swing || 'inward-left';
+                  const flipped = cur.includes('left') ? cur.replace('left', 'right') : cur.replace('right', 'left');
+                  const updated = recalculateDoorGeometry(selectedEntity, flipped, selectedEntity.widthMm);
+                  onUpdateEntity(selectedEntity.id, updated);
+                }}
+                style={{
+                  flex: 1,
+                  background: '#334155',
+                  border: '1px solid #475569',
+                  color: '#38BDF8',
+                  padding: '5px',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                ⇄ Flip Left/Right
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const cur = selectedEntity.swing || 'inward-left';
+                  const flipped = cur.includes('inward') ? cur.replace('inward', 'outward') : cur.replace('outward', 'inward');
+                  const updated = recalculateDoorGeometry(selectedEntity, flipped, selectedEntity.widthMm);
+                  onUpdateEntity(selectedEntity.id, updated);
+                }}
+                style={{
+                  flex: 1,
+                  background: '#334155',
+                  border: '1px solid #475569',
+                  color: '#38BDF8',
+                  padding: '5px',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                ⇅ Flip In/Out
+              </button>
             </div>
           </>
         )}
