@@ -832,11 +832,28 @@ export default function AutoCadCanvas({
                   strokeWidth={1.2 / zoom}
                   strokeDasharray={`${8 / zoom} ${6 / zoom}`}
                 />
-                <g transform={`translate(${cx}, ${cy}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                <g
+                  transform={`translate(${cx}, ${cy}) scale(${1 / zoom}, ${-1 / zoom})`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newName = prompt("Enter Custom Label for this Room (e.g. LIVING, BEDROOM, KITCHEN):", room.name || `Room ${idx + 1}`);
+                    if (newName && newName.trim()) {
+                      onAddEntity({
+                        type: 'text',
+                        text: newName.trim().toUpperCase(),
+                        x: cx,
+                        y: cy + 120,
+                        fontSize: 280,
+                        layer: 'A-TEXT'
+                      });
+                    }
+                  }}
+                >
                   <rect
-                    x="-50"
+                    x="-55"
                     y="-16"
-                    width="100"
+                    width="110"
                     height="32"
                     rx="6"
                     fill="#0F172A"
@@ -853,7 +870,7 @@ export default function AutoCadCanvas({
                     fontWeight="800"
                     letterSpacing="0.05em"
                   >
-                    ROOM {idx + 1}
+                    ROOM {idx + 1} ✎
                   </text>
                   <text
                     x="0"
@@ -1026,14 +1043,35 @@ export default function AutoCadCanvas({
             if (ent.type === 'dimension' && ent.p1 && ent.p2) {
               const d = Math.round(dist(ent.p1, ent.p2));
               const mid = { x: (ent.p1.x + ent.p2.x) / 2, y: (ent.p1.y + ent.p2.y) / 2 };
+              const tickLen = 8 / zoom;
               return (
                 <g key={ent.id} className="cad-dimension">
-                  <line x1={ent.p1.x} y1={ent.p1.y} x2={ent.p2.x} y2={ent.p2.y} stroke="#94A3B8" strokeWidth={1.2 / zoom} />
-                  <circle cx={ent.p1.x} cy={ent.p1.y} r={3 / zoom} fill="#94A3B8" />
-                  <circle cx={ent.p2.x} cy={ent.p2.y} r={3 / zoom} fill="#94A3B8" />
+                  {/* Dimension line */}
+                  <line x1={ent.p1.x} y1={ent.p1.y} x2={ent.p2.x} y2={ent.p2.y} stroke="#38BDF8" strokeWidth={1.4 / zoom} />
+                  {/* 45-degree Architectural Ticks */}
+                  <line
+                    x1={ent.p1.x - tickLen * 0.7}
+                    y1={ent.p1.y - tickLen * 0.7}
+                    x2={ent.p1.x + tickLen * 0.7}
+                    y2={ent.p1.y + tickLen * 0.7}
+                    stroke="#38BDF8"
+                    strokeWidth={2 / zoom}
+                  />
+                  <line
+                    x1={ent.p2.x - tickLen * 0.7}
+                    y1={ent.p2.y - tickLen * 0.7}
+                    x2={ent.p2.x + tickLen * 0.7}
+                    y2={ent.p2.y + tickLen * 0.7}
+                    stroke="#38BDF8"
+                    strokeWidth={2 / zoom}
+                  />
+                  {/* Extension marks */}
+                  <circle cx={ent.p1.x} cy={ent.p1.y} r={3 / zoom} fill="#0284C7" />
+                  <circle cx={ent.p2.x} cy={ent.p2.y} r={3 / zoom} fill="#0284C7" />
+                  {/* Dimension label */}
                   <g transform={`translate(${mid.x}, ${mid.y}) scale(${1 / zoom}, ${-1 / zoom})`}>
-                    <rect x="-30" y="-14" width="60" height="16" fill="#0A0E17" rx="3" />
-                    <text x="0" y="-2" textAnchor="middle" fill="#38BDF8" fontSize="11" fontWeight="700">
+                    <rect x="-35" y="-12" width="70" height="18" fill="#020617" stroke="#38BDF8" strokeWidth="1" rx="4" />
+                    <text x="0" y="2" textAnchor="middle" fill="#F8FAFC" fontSize="10" fontWeight="700" fontFamily="monospace">
                       {d} mm
                     </text>
                   </g>
@@ -1225,6 +1263,46 @@ export default function AutoCadCanvas({
           </div>
         )}
       </div>
+
+      {/* Real-World CAD Scale Bar (Bottom Left) */}
+      {(() => {
+        const scaleDistMm = zoom > 0.05 ? 1000 : (zoom > 0.01 ? 5000 : 10000);
+        const scaleBarPx = Math.max(30, scaleDistMm * zoom);
+        return (
+          <div style={{
+            position: 'absolute',
+            bottom: 16,
+            left: 18,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: '3px',
+            backgroundColor: 'rgba(15, 23, 42, 0.88)',
+            backdropFilter: 'blur(6px)',
+            border: '1px solid #334155',
+            borderRadius: '6px',
+            padding: '5px 10px',
+            fontSize: '10px',
+            fontWeight: 700,
+            color: '#94A3B8',
+            pointerEvents: 'none',
+            userSelect: 'none',
+            zIndex: 25,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+          }}>
+            <div style={{
+              width: `${scaleBarPx}px`,
+              height: '4px',
+              borderLeft: '2px solid #38BDF8',
+              borderRight: '2px solid #38BDF8',
+              borderBottom: '2px solid #38BDF8'
+            }} />
+            <span style={{ color: '#38BDF8', fontSize: '9px', marginTop: '2px', fontFamily: 'monospace' }}>
+              {scaleDistMm >= 1000 ? `${scaleDistMm / 1000} m` : `${scaleDistMm} mm`} (Scale 1:{Math.round(1 / zoom)})
+            </span>
+          </div>
+        );
+      })()}
     </div>
   );
 }
