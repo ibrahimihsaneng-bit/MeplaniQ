@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AutoCadRibbon from '../features/autocad/AutoCadRibbon';
 import AutoCadCanvas from '../features/autocad/AutoCadCanvas';
@@ -7,6 +7,7 @@ import AutoCadStatusBar from '../features/autocad/AutoCadStatusBar';
 import AutoCadLayerManager from '../features/autocad/AutoCadLayerManager';
 import AutoCadPropertiesPanel from '../features/autocad/AutoCadPropertiesPanel';
 import AutoCadBlockLibrary from '../features/autocad/AutoCadBlockLibrary';
+import AutoCadEngineeringPanel from '../features/autocad/AutoCadEngineeringPanel';
 import { useCadDraftingStore } from '../features/autocad/useCadDraftingStore';
 import {
   extractRoomsFromLinework,
@@ -67,6 +68,7 @@ export default function AutoCadPage() {
   const [isLayerManagerOpen, setIsLayerManagerOpen] = useState(false);
   const [isBlockLibraryOpen, setIsBlockLibraryOpen] = useState(false);
   const [isPropertiesOpen, setIsPropertiesOpen] = useState(true);
+  const [isEngineeringPanelOpen, setIsEngineeringPanelOpen] = useState(false);
   const [showWallDimensions, setShowWallDimensions] = useState(true);
   const [activeBlockToPlace, setActiveBlockToPlace] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
@@ -84,6 +86,9 @@ export default function AutoCadPage() {
 
   // Selected entity for Properties Panel
   const selectedEntity = entities.find(e => selectedIds.includes(e.id)) || null;
+
+  // Live Detected Rooms from CAD linework planar topology
+  const detectedRooms = useMemo(() => extractRoomsFromLinework(entities), [entities]);
 
   // 1. Load project or initialize demo starter walls
   useEffect(() => {
@@ -440,6 +445,14 @@ export default function AutoCadPage() {
         appendHistory("Toggled Properties Palette.");
         break;
 
+      case 'ENG':
+      case 'BIM':
+      case 'ANALYTICS':
+      case 'COMPLIANCE':
+        setIsEngineeringPanelOpen(prev => !prev);
+        appendHistory("Toggled BIM Engineering Analytics & Compliance Dashboard.");
+        break;
+
       case 'DIMS':
         setShowWallDimensions(prev => !prev);
         appendHistory(`Wall Dimensions: ${!showWallDimensions ? 'ON' : 'OFF'}`);
@@ -672,6 +685,8 @@ export default function AutoCadPage() {
         onOpenBlockLibrary={() => setIsBlockLibraryOpen(true)}
         onTogglePropertiesPanel={() => setIsPropertiesOpen(prev => !prev)}
         isPropertiesOpen={isPropertiesOpen}
+        onToggleEngineeringPanel={() => setIsEngineeringPanelOpen(prev => !prev)}
+        isEngineeringPanelOpen={isEngineeringPanelOpen}
         showWallDimensions={showWallDimensions}
         onToggleWallDimensions={() => setShowWallDimensions(prev => !prev)}
         settings={settings}
@@ -808,11 +823,20 @@ export default function AutoCadPage() {
           />
         )}
 
+        {/* PhD Grade BIM Engineering Analytics & Compliance Panel (Right) */}
+        {isEngineeringPanelOpen && (
+          <AutoCadEngineeringPanel
+            entities={entities}
+            detectedRooms={detectedRooms}
+            onClose={() => setIsEngineeringPanelOpen(false)}
+          />
+        )}
+
         {/* View Mode Switcher Pill (Top Right) */}
         <div style={{
           position: 'absolute',
           top: 14,
-          right: isPropertiesOpen && selectedEntity ? 310 : 18,
+          right: (isPropertiesOpen && selectedEntity) ? 310 : (isEngineeringPanelOpen ? 450 : 18),
           display: 'flex',
           gap: '8px',
           zIndex: 30,

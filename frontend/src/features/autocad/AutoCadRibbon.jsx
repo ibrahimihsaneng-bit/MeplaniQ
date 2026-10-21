@@ -10,6 +10,8 @@ export default function AutoCadRibbon({
   onOpenBlockLibrary,
   onTogglePropertiesPanel,
   isPropertiesOpen,
+  onToggleEngineeringPanel,
+  isEngineeringPanelOpen,
   showWallDimensions,
   onToggleWallDimensions,
   settings,
@@ -197,6 +199,28 @@ export default function AutoCadRibbon({
             }}
           >
             📋 Properties
+          </button>
+
+          {/* PhD Grade Engineering Analytics Panel Toggle */}
+          <button
+            type="button"
+            onClick={onToggleEngineeringPanel}
+            title="Open Computational BIM, NBC Compliance & MEP Engineering Dashboard"
+            style={{
+              background: isEngineeringPanelOpen ? '#4338CA' : '#1E293B',
+              border: `1px solid ${isEngineeringPanelOpen ? '#818CF8' : '#334155'}`,
+              color: isEngineeringPanelOpen ? '#FFFFFF' : '#C7D2FE',
+              padding: '4px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <span>🔬</span>
+            <span>BIM Analytics</span>
           </button>
 
           {/* Convert Linework to MEPlanIQ Solved Rooms */}

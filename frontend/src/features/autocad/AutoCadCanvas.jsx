@@ -12,7 +12,9 @@ import {
   mirrorEntityGeometry,
   getEntityCenter,
   offsetSegment,
-  extractRoomsFromLinework
+  extractRoomsFromLinework,
+  trimEntitySegment,
+  extendEntitySegment
 } from './cadGeometryUtils';
 import {
   findSnapTarget,
@@ -613,6 +615,49 @@ export default function AutoCadCanvas({
       return;
     }
 
+    // 5.9 TRIM TOOL
+    if (activeTool === 'trim') {
+      const hitTrim = hitTestEntity(pt, entities, Math.max(120, 18 / zoom));
+      if (hitTrim) {
+        const res = trimEntitySegment(hitTrim.entity, pt, entities);
+        if (res) {
+          if (res.action === 'delete') {
+            onDeleteEntities([res.entityId]);
+            onPromptUpdate && onPromptUpdate("TRIM: Object erased.");
+          } else if (res.action === 'update') {
+            onUpdateEntity(res.entityId, res.updates);
+            onPromptUpdate && onPromptUpdate("TRIM: Segment trimmed to boundary.");
+          } else if (res.action === 'split') {
+            onUpdateEntity(res.entityId, res.updates);
+            onAddEntity(res.extraEntity);
+            onPromptUpdate && onPromptUpdate("TRIM: Segment trimmed and split at boundaries.");
+          }
+        } else {
+          onPromptUpdate && onPromptUpdate("TRIM: No boundary intersection found to trim.");
+        }
+      } else {
+        onPromptUpdate && onPromptUpdate("TRIM: Click a line or wall segment to trim.");
+      }
+      return;
+    }
+
+    // 5.10 EXTEND TOOL
+    if (activeTool === 'extend') {
+      const hitExtend = hitTestEntity(pt, entities, Math.max(120, 18 / zoom));
+      if (hitExtend) {
+        const res = extendEntitySegment(hitExtend.entity, pt, entities);
+        if (res && res.action === 'update') {
+          onUpdateEntity(res.entityId, res.updates);
+          onPromptUpdate && onPromptUpdate("EXTEND: Extended to boundary edge.");
+        } else {
+          onPromptUpdate && onPromptUpdate("EXTEND: No intersecting boundary found along direction.");
+        }
+      } else {
+        onPromptUpdate && onPromptUpdate("EXTEND: Click end of line or wall to extend.");
+      }
+      return;
+    }
+
     // 6. CHECK FOR DRAGGING EXISTING ENTITY OR GRIP HANDLE
     // (Prevents accidental wild 13m segments when user clicks an existing wall!)
     const hit = hitTestEntity(pt, entities, Math.max(120, 18 / zoom));
@@ -813,6 +858,13 @@ export default function AutoCadCanvas({
             <rect width="1000" height="1000" fill="url(#cad-grid-minor)" />
             <path d="M 1000 0 L 0 0 0 1000" fill="none" stroke="rgba(255, 255, 255, 0.12)" strokeWidth={1.5 / zoom} />
           </pattern>
+          {/* ARCHITECTURAL CAD HATCH PATTERNS */}
+          <pattern id="cad-hatch-ansi31" width="250" height="250" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="250" stroke="rgba(56, 189, 248, 0.16)" strokeWidth={1.2 / zoom} />
+          </pattern>
+          <pattern id="cad-hatch-grid" width="300" height="300" patternUnits="userSpaceOnUse">
+            <rect width="300" height="300" fill="none" stroke="rgba(148, 163, 184, 0.15)" strokeWidth={1 / zoom} />
+          </pattern>
         </defs>
 
         <g
@@ -864,8 +916,8 @@ export default function AutoCadCanvas({
               <g key={`detected-room-${idx}`} className="cad-detected-room">
                 <polygon
                   points={ptsStr}
-                  fill="rgba(56, 189, 248, 0.05)"
-                  stroke="rgba(56, 189, 248, 0.25)"
+                  fill="url(#cad-hatch-ansi31)"
+                  stroke="rgba(56, 189, 248, 0.35)"
                   strokeWidth={1.2 / zoom}
                   strokeDasharray={`${8 / zoom} ${6 / zoom}`}
                 />

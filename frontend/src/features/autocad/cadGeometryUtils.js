@@ -671,3 +671,225 @@ export function mirrorEntityGeometry(ent, axis = 'horizontal', customCenter = nu
   }
   return updated;
 }
+
+/**
+ * Trims a line or wall segment at intersection points.
+ * Finds all intersections of targetEntity with other lines/walls.
+ * Projects clickPt onto the entity to identify which interval was clicked,
+ * and removes that portion.
+ * Returns { action: 'delete' } OR { action: 'update', newEntity: {...}, extraEntity: {...} } OR null
+ */
+export function trimEntitySegment(targetEntity, clickPt, otherEntities) {
+  let seg = null;
+  if (targetEntity.type === 'line' && targetEntity.p1 && targetEntity.p2) {
+    seg = { p1: { ...targetEntity.p1 }, p2: { ...targetEntity.p2 } };
+  } else if (targetEntity.type === 'wall' && targetEntity.centerline) {
+    seg = { p1: { ...targetEntity.centerline.p1 }, p2: { ...targetEntity.centerline.p2 } };
+  }
+  if (!seg) return null;
+
+  const totalLen = dist(seg.p1, seg.p2);
+  if (totalLen < 1) return null;
+
+  // Collect all intersections with other entities
+  const tVals = [0, 1];
+  for (const other of otherEntities) {
+    if (other.id === targetEntity.id || other.visible === false) continue;
+    let otherSegs = [];
+    if (other.type === 'line' && other.p1 && other.p2) {
+      otherSegs.push({ p1: other.p1, p2: other.p2 });
+    } else if (other.type === 'wall' && other.centerline) {
+      otherSegs.push({ p1: other.centerline.p1, p2: other.centerline.p2 });
+    } else if (other.type === 'rect' && other.p1 && other.p2) {
+      const rx1 = Math.min(other.p1.x, other.p2.x);
+      const rx2 = Math.max(other.p1.x, other.p2.x);
+      const ry1 = Math.min(other.p1.y, other.p2.y);
+      const ry2 = Math.max(other.p1.y, other.p2.y);
+      otherSegs.push(
+        { p1: { x: rx1, y: ry1 }, p2: { x: rx2, y: ry1 } },
+        { p1: { x: rx2, y: ry1 }, p2: { x: rx2, y: ry2 } },
+        { p1: { x: rx2, y: ry2 }, p2: { x: rx1, y: ry2 } },
+        { p1: { x: rx1, y: ry2 }, p2: { x: rx1, y: ry1 } }
+      );
+    }
+
+    for (const os of otherSegs) {
+      const inter = getLineIntersection(seg.p1, seg.p2, os.p1, os.p2, false);
+      if (inter) {
+        const proj = projectPointOntoSegment(inter, seg.p1, seg.p2);
+        if (proj.t > 0.001 && proj.t < 0.999) {
+          tVals.push(proj.t);
+        }
+      }
+    }
+  }
+
+  // Deduplicate and sort t values
+  tVals.sort((a, b) => a - b);
+  const uniqueT = [];
+  for (const t of tVals) {
+    if (uniqueT.length === 0 || Math.abs(t - uniqueT[uniqueT.length - 1]) > 0.005) {
+      uniqueT.push(t);
+    }
+  }
+
+  if (uniqueT.length <= 2) {
+    // No internal intersections - delete the entity
+    return { action: 'delete', entityId: targetEntity.id };
+  }
+
+  // Find clickPt projection t
+  const clickProj = projectPointOntoSegment(clickPt, seg.p1, seg.p2);
+  const clickT = clickProj.t;
+
+  // Find which interval contains clickT
+  let cutIdx = 0;
+  for (let i = 0; i < uniqueT.length - 1; i++) {
+    if (clickT >= uniqueT[i] && clickT <= uniqueT[i + 1]) {
+      cutIdx = i;
+      break;
+    }
+  }
+
+  const dx = seg.p2.x - seg.p1.x;
+  const dy = seg.p2.y - seg.p1.y;
+  const ptAtT = (t) => ({ x: Math.round(seg.p1.x + t * dx), y: Math.round(seg.p1.y + t * dy) });
+
+  // Case 1: First interval (trim off start)
+  if (cutIdx === 0) {
+    const newP1 = ptAtT(uniqueT[1]);
+    const newP2 = seg.p2;
+    if (targetEntity.type === 'line') {
+      return { action: 'update', entityId: targetEntity.id, updates: { p1: newP1, p2: newP2 } };
+    } else {
+      return { action: 'update', entityId: targetEntity.id, updates: { centerline: { p1: newP1, p2: newP2 } } };
+    }
+  }
+
+  // Case 2: Last interval (trim off end)
+  if (cutIdx === uniqueT.length - 2) {
+    const newP1 = seg.p1;
+    const newP2 = ptAtT(uniqueT[uniqueT.length - 2]);
+    if (targetEntity.type === 'line') {
+      return { action: 'update', entityId: targetEntity.id, updates: { p1: newP1, p2: newP2 } };
+    } else {
+      return { action: 'update', entityId: targetEntity.id, updates: { centerline: { p1: newP1, p2: newP2 } } };
+    }
+  }
+
+  // Case 3: Middle interval (split entity into two remaining segments)
+  const seg1End = ptAtT(uniqueT[cutIdx]);
+  const seg2Start = ptAtT(uniqueT[cutIdx + 1]);
+
+  if (targetEntity.type === 'line') {
+    return {
+      action: 'split',
+      entityId: targetEntity.id,
+      updates: { p1: seg.p1, p2: seg1End },
+      extraEntity: {
+        ...targetEntity,
+        id: `line-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        p1: seg2Start,
+        p2: seg.p2
+      }
+    };
+  } else {
+    return {
+      action: 'split',
+      entityId: targetEntity.id,
+      updates: { centerline: { p1: seg.p1, p2: seg1End } },
+      extraEntity: {
+        ...targetEntity,
+        id: `wall-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        centerline: { p1: seg2Start, p2: seg.p2 }
+      }
+    };
+  }
+}
+
+/**
+ * Extends a line or wall segment towards the nearest boundary entity.
+ * Determines which endpoint is closer to clickPt and casts a ray in that direction.
+ * Returns { action: 'update', entityId: ..., updates: ... } OR null if no boundary found.
+ */
+export function extendEntitySegment(targetEntity, clickPt, otherEntities) {
+  let seg = null;
+  if (targetEntity.type === 'line' && targetEntity.p1 && targetEntity.p2) {
+    seg = { p1: { ...targetEntity.p1 }, p2: { ...targetEntity.p2 } };
+  } else if (targetEntity.type === 'wall' && targetEntity.centerline) {
+    seg = { p1: { ...targetEntity.centerline.p1 }, p2: { ...targetEntity.centerline.p2 } };
+  }
+  if (!seg) return null;
+
+  // Check which end was clicked
+  const d1 = dist(clickPt, seg.p1);
+  const d2 = dist(clickPt, seg.p2);
+  const extendP1 = d1 < d2; // If closer to p1, extend past p1 away from p2
+
+  const basePt = extendP1 ? seg.p2 : seg.p1;
+  const rayEnd = extendP1 ? seg.p1 : seg.p2;
+  const dirX = rayEnd.x - basePt.x;
+  const dirY = rayEnd.y - basePt.y;
+  const len = Math.sqrt(dirX * dirX + dirY * dirY);
+  if (len < 1) return null;
+
+  const unitX = dirX / len;
+  const unitY = dirY / len;
+
+  // Maximum extension distance (50 meters = 50000 mm)
+  const farPt = {
+    x: rayEnd.x + unitX * 50000,
+    y: rayEnd.y + unitY * 50000
+  };
+
+  let closestInter = null;
+  let minInterDist = Infinity;
+
+  for (const other of otherEntities) {
+    if (other.id === targetEntity.id || other.visible === false) continue;
+    let otherSegs = [];
+    if (other.type === 'line' && other.p1 && other.p2) {
+      otherSegs.push({ p1: other.p1, p2: other.p2 });
+    } else if (other.type === 'wall' && other.centerline) {
+      otherSegs.push({ p1: other.centerline.p1, p2: other.centerline.p2 });
+    } else if (other.type === 'rect' && other.p1 && other.p2) {
+      const rx1 = Math.min(other.p1.x, other.p2.x);
+      const rx2 = Math.max(other.p1.x, other.p2.x);
+      const ry1 = Math.min(other.p1.y, other.p2.y);
+      const ry2 = Math.max(other.p1.y, other.p2.y);
+      otherSegs.push(
+        { p1: { x: rx1, y: ry1 }, p2: { x: rx2, y: ry1 } },
+        { p1: { x: rx2, y: ry1 }, p2: { x: rx2, y: ry2 } },
+        { p1: { x: rx2, y: ry2 }, p2: { x: rx1, y: ry2 } },
+        { p1: { x: rx1, y: ry2 }, p2: { x: rx1, y: ry1 } }
+      );
+    }
+
+    for (const os of otherSegs) {
+      const inter = getLineIntersection(rayEnd, farPt, os.p1, os.p2, false);
+      if (inter) {
+        const d = dist(rayEnd, inter);
+        if (d > 5 && d < minInterDist) {
+          minInterDist = d;
+          closestInter = { x: Math.round(inter.x), y: Math.round(inter.y) };
+        }
+      }
+    }
+  }
+
+  if (!closestInter) return null;
+
+  if (targetEntity.type === 'line') {
+    return {
+      action: 'update',
+      entityId: targetEntity.id,
+      updates: extendP1 ? { p1: closestInter } : { p2: closestInter }
+    };
+  } else {
+    return {
+      action: 'update',
+      entityId: targetEntity.id,
+      updates: extendP1 ? { centerline: { p1: closestInter, p2: seg.p2 } } : { centerline: { p1: seg.p1, p2: closestInter } }
+    };
+  }
+}
