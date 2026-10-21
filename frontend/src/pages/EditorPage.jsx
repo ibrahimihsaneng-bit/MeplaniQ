@@ -2054,7 +2054,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={7} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={8} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}

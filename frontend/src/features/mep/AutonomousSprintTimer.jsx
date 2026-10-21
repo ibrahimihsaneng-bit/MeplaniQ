@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 7, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 8, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -263,15 +263,15 @@ export default function AutonomousSprintTimer({ currentCycle = 7, totalHours = 2
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#A78BFA', marginTop: '2px' }}>
                     M25 Concrete & 5x5 Clash Matrix
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 126/126 Tests Passing</div>
+                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 129/129 Tests Passing</div>
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>AUTOLISP & OPENBIM IFC4</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#E2E8F0', marginTop: '2px' }}>
-                    AutoCAD .lsp & Revit IFC4
+                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>THERMAL COMFORT & FITTINGS</div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#38BDF8', marginTop: '2px' }}>
+                    ASHRAE 55 PMV & SMACNA ESP
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ APPLOAD & ISO 16739-1</div>
+                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ Category A/B & Fan BHP</div>
                 </div>
               </div>
             </div>

@@ -321,3 +321,193 @@ def solve_hvac_system(
         ))
 
     return loads, equipment_list, pipe_routes
+
+
+def calculate_ashrae_pmv_ppd(
+    ta: float = 24.5,
+    tr: float = 24.5,
+    vel: float = 0.18,
+    rh: float = 50.0,
+    met: float = 1.1,
+    clo: float = 0.65
+) -> Dict[str, Any]:
+    """
+    Computes Predicted Mean Vote (PMV) and Predicted Percentage Dissatisfied (PPD)
+    in strict accordance with ISO 7730:2005 & ASHRAE Standard 55-2023.
+    """
+    m = met * 58.15
+    w = 0.0
+    h = m - w
+    pa = (rh / 100.0) * 100.0 * math.exp(16.6536 - 4030.183 / (ta + 235.0))
+    icl = 0.155 * clo
+    fcl = 1.00 + 1.290 * icl if icl <= 0.078 else 1.05 + 0.645 * icl
+
+    tcl = ta + (35.5 - ta) / (3.5 * (6.45 * icl + 0.1))
+
+    for _ in range(150):
+        hcf = 12.1 * math.sqrt(max(vel, 0.01))
+        hcn = 2.38 * abs(tcl - ta) ** 0.25
+        hc = max(hcf, hcn)
+        tcl_next = 35.7 - 0.028 * h - icl * (3.96e-8 * fcl * ((tcl + 273.15)**4 - (tr + 273.15)**4) + fcl * hc * (tcl - ta))
+        if abs(tcl_next - tcl) < 0.001:
+            tcl = tcl_next
+            break
+        tcl = 0.8 * tcl + 0.2 * tcl_next
+
+    hl1 = 3.05 * 0.001 * (5733.0 - 6.99 * h - pa)
+    hl2 = 0.42 * (h - 58.15) if h > 58.15 else 0.0
+    hl3 = 1.7e-5 * m * (5867.0 - pa)
+    hl4 = 0.0014 * m * (34.0 - ta)
+    hl5 = 3.96e-8 * fcl * ((tcl + 273.15)**4 - (tr + 273.15)**4)
+    hl6 = fcl * hc * (tcl - ta)
+
+    l = h - (hl1 + hl2 + hl3 + hl4 + hl5 + hl6)
+    ts = 0.303 * math.exp(-0.036 * m) + 0.028
+    pmv = round(ts * l, 2)
+    ppd = round(100.0 - 95.0 * math.exp(-0.03353 * (pmv ** 4) - 0.2179 * (pmv ** 2)), 1)
+
+    # Determine ISO 7730 Comfort Category
+    if abs(pmv) <= 0.2 and ppd <= 6.0:
+        category = "Category A (High Comfort)"
+        status = "OPTIMAL"
+    elif abs(pmv) <= 0.5 and ppd <= 10.0:
+        category = "Category B (Standard Comfort)"
+        status = "COMPLIANT"
+    elif abs(pmv) <= 0.7 and ppd <= 15.0:
+        category = "Category C (Moderate Comfort)"
+        status = "ACCEPTABLE"
+    else:
+        category = "Non-Compliant"
+        status = "OUT_OF_SPEC"
+
+    sensation = "Neutral" if abs(pmv) <= 0.2 else ("Slightly Warm" if pmv > 0.2 else "Slightly Cool")
+    if pmv >= 1.0:
+        sensation = "Warm"
+    elif pmv <= -1.0:
+        sensation = "Cool"
+
+    return {
+        "pmv": pmv,
+        "ppd": ppd,
+        "category": category,
+        "status": status,
+        "sensation": sensation,
+        "ta_c": ta,
+        "tr_c": tr,
+        "vel_ms": vel,
+        "rh_percent": rh,
+        "met": met,
+        "clo": clo,
+        "tcl_c": round(tcl, 2)
+    }
+
+
+def calculate_duct_fittings_and_pressure_loss(
+    ducts: List[Dict[str, Any]],
+    total_cfm: float = 1200.0
+) -> Dict[str, Any]:
+    """
+    Computes dynamic loss coefficients and pressure drops across all standard
+    SMACNA / ASHRAE duct fittings (Elbows, Reducers, Branch Tees, Silencers, Diffusers).
+    Formula: Delta P_fitting = Co * (0.5 * rho * V^2)
+    """
+    rho = 1.204  # Air density at 20°C, kg/m³
+    fittings: List[Dict[str, Any]] = []
+    total_dynamic_loss_pa = 0.0
+
+    # 1. 90° Radius Smooth Turning Elbows (SMACNA CR9-1)
+    elbow_count = max(2, len(ducts) // 2)
+    v_main = 4.2  # Nominal main duct air velocity, m/s
+    pv_main = 0.5 * rho * (v_main ** 2)
+    co_elbow = 0.24  # With aerodynamic turning vanes
+
+    for i in range(elbow_count):
+        loss_pa = round(co_elbow * pv_main, 1)
+        total_dynamic_loss_pa += loss_pa
+        fittings.append({
+            "id": f"FIT-ELB-{i + 1}",
+            "type": "90° Radius Rectangular Elbow (with Turning Vanes)",
+            "standard": "SMACNA CR9-1 (R/W=1.5)",
+            "loss_coeff_co": co_elbow,
+            "velocity_ms": v_main,
+            "loss_pa": loss_pa
+        })
+
+    # 2. Symmetrical Reducer Transition (SMACNA CR4-1)
+    reducer_count = max(1, len(ducts) // 3)
+    co_reducer = 0.12  # Symmetrical 15° slope taper
+    for i in range(reducer_count):
+        loss_pa = round(co_reducer * pv_main, 1)
+        total_dynamic_loss_pa += loss_pa
+        fittings.append({
+            "id": f"FIT-RED-{i + 1}",
+            "type": "Symmetrical Reducer Transition (400x250 -> 300x200)",
+            "standard": "SMACNA CR4-1 (15° Taper)",
+            "loss_coeff_co": co_reducer,
+            "velocity_ms": v_main,
+            "loss_pa": loss_pa
+        })
+
+    # 3. 45° Branch Entry Take-Off Tees (SMACNA SR5-1)
+    branch_count = max(2, len(ducts))
+    co_branch = 0.42
+    for i in range(branch_count):
+        v_branch = 3.2
+        pv_branch = 0.5 * rho * (v_branch ** 2)
+        loss_pa = round(co_branch * pv_branch, 1)
+        total_dynamic_loss_pa += loss_pa
+        fittings.append({
+            "id": f"FIT-TEE-{i + 1}",
+            "type": "45° Entry Branch Take-Off Tee",
+            "standard": "SMACNA SR5-1",
+            "loss_coeff_co": co_branch,
+            "velocity_ms": v_branch,
+            "loss_pa": loss_pa
+        })
+
+    # 4. Acoustic In-line Silencer
+    silencer_loss_pa = 35.0
+    total_dynamic_loss_pa += silencer_loss_pa
+    fittings.append({
+        "id": "FIT-SIL-01",
+        "type": "In-line Acoustic Sound Attenuator (-18 dB)",
+        "standard": "ASHRAE NC-35 Baffle",
+        "loss_coeff_co": 0.85,
+        "velocity_ms": v_main,
+        "loss_pa": silencer_loss_pa
+    })
+
+    # 5. Terminal Ceiling Diffusers with Opposed Blade Dampers
+    diffuser_loss_pa = 25.0
+    total_dynamic_loss_pa += diffuser_loss_pa
+    fittings.append({
+        "id": "FIT-DIF-01",
+        "type": "4-Way Ceiling Diffusers with OBD Dampers",
+        "standard": "ASHRAE 70 Terminal",
+        "loss_coeff_co": 1.20,
+        "velocity_ms": 2.2,
+        "loss_pa": diffuser_loss_pa
+    })
+
+    # 6. Filter & Coil Allowance
+    equipment_loss_pa = 110.0  # MERV 13 Filter (65 Pa) + Cooling Coil (45 Pa)
+    total_dynamic_loss_pa += equipment_loss_pa
+
+    straight_friction_pa = 45.0
+    total_fan_static_pressure_pa = round(straight_friction_pa + total_dynamic_loss_pa, 1)
+    total_fan_static_pressure_in_wg = round(total_fan_static_pressure_pa / 249.0889, 2)
+
+    # Fan Motor Brake Horsepower (BHP): BHP = (CFM * ESP) / (6356 * Fan Efficiency)
+    fan_eff = 0.65
+    fan_bhp = round((total_cfm * total_fan_static_pressure_in_wg) / (6356.0 * fan_eff), 2)
+
+    return {
+        "fittings": fittings,
+        "straight_duct_friction_pa": straight_friction_pa,
+        "fittings_dynamic_loss_pa": round(total_dynamic_loss_pa, 1),
+        "total_fan_static_pressure_pa": total_fan_static_pressure_pa,
+        "total_fan_static_pressure_in_wg": total_fan_static_pressure_in_wg,
+        "fan_bhp": fan_bhp,
+        "fan_efficiency_percent": 65
+    }
+

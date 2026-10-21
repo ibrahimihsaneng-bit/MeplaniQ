@@ -131,6 +131,196 @@ export function calculateDuctAerodynamics(widthMm, heightMm, cfm) {
 }
 
 /**
+ * Computes Predicted Mean Vote (PMV) and Predicted Percentage Dissatisfied (PPD)
+ * in accordance with ISO 7730:2005 & ASHRAE Standard 55-2023.
+ */
+export function calculateAshraeThermalComfort(
+  ta = 24.5,
+  tr = 24.5,
+  vel = 0.18,
+  rh = 50.0,
+  met = 1.1,
+  clo = 0.65
+) {
+  const m = met * 58.15;
+  const w = 0.0;
+  const h = m - w;
+  const pa = (rh / 100.0) * 100.0 * Math.exp(16.6536 - 4030.183 / (ta + 235.0));
+  const icl = 0.155 * clo;
+  const fcl = icl <= 0.078 ? (1.00 + 1.290 * icl) : (1.05 + 0.645 * icl);
+
+  let tcl = ta + (35.5 - ta) / (3.5 * (6.45 * icl + 0.1));
+
+  for (let i = 0; i < 150; i++) {
+    const hcf = 12.1 * Math.sqrt(Math.max(vel, 0.01));
+    const hcn = 2.38 * Math.pow(Math.abs(tcl - ta), 0.25);
+    const hc = Math.max(hcf, hcn);
+    const tclNext = 35.7 - 0.028 * h - icl * (3.96e-8 * fcl * (Math.pow(tcl + 273.15, 4) - Math.pow(tr + 273.15, 4)) + fcl * hc * (tcl - ta));
+    if (Math.abs(tclNext - tcl) < 0.001) {
+      tcl = tclNext;
+      break;
+    }
+    tcl = 0.8 * tcl + 0.2 * tclNext;
+  }
+
+  const hcf = 12.1 * Math.sqrt(Math.max(vel, 0.01));
+  const hcn = 2.38 * Math.pow(Math.abs(tcl - ta), 0.25);
+  const hc = Math.max(hcf, hcn);
+
+  const hl1 = 3.05 * 0.001 * (5733.0 - 6.99 * h - pa);
+  const hl2 = h > 58.15 ? 0.42 * (h - 58.15) : 0.0;
+  const hl3 = 1.7e-5 * m * (5867.0 - pa);
+  const hl4 = 0.0014 * m * (34.0 - ta);
+  const hl5 = 3.96e-8 * fcl * (Math.pow(tcl + 273.15, 4) - Math.pow(tr + 273.15, 4));
+  const hl6 = fcl * hc * (tcl - ta);
+
+  const l = h - (hl1 + hl2 + hl3 + hl4 + hl5 + hl6);
+  const ts = 0.303 * Math.exp(-0.036 * m) + 0.028;
+  const pmv = parseFloat((ts * l).toFixed(2));
+  const ppd = parseFloat((100.0 - 95.0 * Math.exp(-0.03353 * Math.pow(pmv, 4) - 0.2179 * Math.pow(pmv, 2))).toFixed(1));
+
+  let category = "Category B (Standard Office Comfort)";
+  let status = "COMPLIANT";
+  if (Math.abs(pmv) <= 0.2 && ppd <= 6.0) {
+    category = "Category A (High Comfort)";
+    status = "OPTIMAL";
+  } else if (Math.abs(pmv) <= 0.5 && ppd <= 10.0) {
+    category = "Category B (Standard Office Comfort)";
+    status = "COMPLIANT";
+  } else if (Math.abs(pmv) <= 0.7 && ppd <= 15.0) {
+    category = "Category C (Moderate Comfort)";
+    status = "ACCEPTABLE";
+  } else {
+    category = "Non-Compliant (Thermal Discomfort)";
+    status = "OUT_OF_SPEC";
+  }
+
+  let sensation = "Neutral";
+  if (pmv > 0.2 && pmv < 0.7) sensation = "Slightly Warm";
+  else if (pmv >= 0.7 && pmv < 1.5) sensation = "Warm";
+  else if (pmv >= 1.5) sensation = "Hot";
+  else if (pmv < -0.2 && pmv > -0.7) sensation = "Slightly Cool";
+  else if (pmv <= -0.7 && pmv > -1.5) sensation = "Cool";
+  else if (pmv <= -1.5) sensation = "Cold";
+
+  return {
+    pmv,
+    ppd,
+    category,
+    status,
+    sensation,
+    ta,
+    tr,
+    vel,
+    rh,
+    met,
+    clo,
+    tclC: parseFloat(tcl.toFixed(1))
+  };
+}
+
+/**
+ * Computes dynamic loss coefficients and pressure drops across all standard
+ * SMACNA / ASHRAE duct fittings (Elbows, Reducers, Branch Tees, Silencers, Diffusers).
+ */
+export function calculateDuctFittingsAndPressureLoss(ducts = [], totalCfm = 1200.0) {
+  const rho = 1.204;
+  const fittings = [];
+  let totalDynamicLossPa = 0.0;
+
+  const elbowCount = Math.max(2, Math.floor(ducts.length / 2));
+  const vMain = 4.2;
+  const pvMain = 0.5 * rho * Math.pow(vMain, 2);
+  const coElbow = 0.24;
+
+  for (let i = 0; i < elbowCount; i++) {
+    const lossPa = parseFloat((coElbow * pvMain).toFixed(1));
+    totalDynamicLossPa += lossPa;
+    fittings.push({
+      id: `FIT-ELB-${i + 1}`,
+      type: "90° Radius Rectangular Elbow (with Turning Vanes)",
+      standard: "SMACNA CR9-1 (R/W=1.5)",
+      lossCoeffCo: coElbow,
+      velocityMs: vMain,
+      lossPa
+    });
+  }
+
+  const reducerCount = Math.max(1, Math.floor(ducts.length / 3));
+  const coReducer = 0.12;
+  for (let i = 0; i < reducerCount; i++) {
+    const lossPa = parseFloat((coReducer * pvMain).toFixed(1));
+    totalDynamicLossPa += lossPa;
+    fittings.push({
+      id: `FIT-RED-${i + 1}`,
+      type: "Symmetrical Reducer Transition (400x250 -> 300x200)",
+      standard: "SMACNA CR4-1 (15° Taper)",
+      lossCoeffCo: coReducer,
+      velocityMs: vMain,
+      lossPa
+    });
+  }
+
+  const branchCount = Math.max(2, ducts.length);
+  const coBranch = 0.42;
+  for (let i = 0; i < branchCount; i++) {
+    const vBranch = 3.2;
+    const pvBranch = 0.5 * rho * Math.pow(vBranch, 2);
+    const lossPa = parseFloat((coBranch * pvBranch).toFixed(1));
+    totalDynamicLossPa += lossPa;
+    fittings.push({
+      id: `FIT-TEE-${i + 1}`,
+      type: "45° Entry Branch Take-Off Tee",
+      standard: "SMACNA SR5-1",
+      lossCoeffCo: coBranch,
+      velocityMs: vBranch,
+      lossPa
+    });
+  }
+
+  const silencerLossPa = 35.0;
+  totalDynamicLossPa += silencerLossPa;
+  fittings.push({
+    id: "FIT-SIL-01",
+    type: "In-line Acoustic Sound Attenuator (-18 dB)",
+    standard: "ASHRAE NC-35 Baffle",
+    lossCoeffCo: 0.85,
+    velocityMs: vMain,
+    lossPa: silencerLossPa
+  });
+
+  const diffuserLossPa = 25.0;
+  totalDynamicLossPa += diffuserLossPa;
+  fittings.push({
+    id: "FIT-DIF-01",
+    type: "4-Way Ceiling Diffusers with OBD Dampers",
+    standard: "ASHRAE 70 Terminal",
+    lossCoeffCo: 1.20,
+    velocityMs: 2.2,
+    lossPa: diffuserLossPa
+  });
+
+  const equipmentLossPa = 110.0;
+  totalDynamicLossPa += equipmentLossPa;
+
+  const straightFrictionPa = 45.0;
+  const totalFanStaticPressurePa = parseFloat((straightFrictionPa + totalDynamicLossPa).toFixed(1));
+  const totalFanStaticPressureInWg = parseFloat((totalFanStaticPressurePa / 249.0889).toFixed(2));
+  const fanEff = 0.65;
+  const fanBhp = parseFloat(((totalCfm * totalFanStaticPressureInWg) / (6356.0 * fanEff)).toFixed(2));
+
+  return {
+    fittings,
+    straightDuctFrictionPa: straightFrictionPa,
+    fittingsDynamicLossPa: parseFloat(totalDynamicLossPa.toFixed(1)),
+    totalFanStaticPressurePa,
+    totalFanStaticPressureInWg,
+    fanBhp,
+    fanEfficiencyPercent: 65
+  };
+}
+
+/**
  * Calculates 3-Phase Electrical Load Balancing Schedule for DB-01.
  */
 /**

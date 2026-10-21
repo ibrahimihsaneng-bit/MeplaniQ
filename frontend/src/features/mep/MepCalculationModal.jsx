@@ -5,6 +5,8 @@ import {
   calculatePlumbingHydraulics,
   calculateBillOfQuantities,
   calculateElectricalRiserAndVoltageDrop,
+  calculateAshraeThermalComfort,
+  calculateDuctFittingsAndPressureLoss,
   getRoomGeometry,
   classifyRoomType,
   calculateRoomCoolingAndCfm
@@ -13,6 +15,27 @@ import {
 export default function MepCalculationModal({ isOpen, onClose, solveData, projectName = 'MEP Project' }) {
   const [activeTab, setActiveTab] = useState('hvac'); // 'hvac' | 'electrical' | 'plumbing' | 'boq'
   const [copiedNotification, setCopiedNotification] = useState(false);
+
+  // Thermal Comfort Parameters State
+  const [thermalParams, setThermalParams] = useState({
+    ta: 24.5,
+    tr: 24.5,
+    vel: 0.18,
+    rh: 50.0,
+    met: 1.1,
+    clo: 0.65
+  });
+
+  const thermalComfort = useMemo(() => {
+    return calculateAshraeThermalComfort(
+      thermalParams.ta,
+      thermalParams.tr,
+      thermalParams.vel,
+      thermalParams.rh,
+      thermalParams.met,
+      thermalParams.clo
+    );
+  }, [thermalParams]);
 
   // Compute HVAC Duct Aerodynamics per room
   const hvacData = useMemo(() => {
@@ -71,6 +94,14 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
       }
     };
   }, [solveData]);
+
+  // Compute SMACNA Duct Fittings & Pressure Loss
+  const fittingsData = useMemo(() => {
+    return calculateDuctFittingsAndPressureLoss(
+      solveData?.hvac_ducts || [],
+      hvacData?.totals?.totalCfm || 1200
+    );
+  }, [solveData, hvacData?.totals?.totalCfm]);
 
   // Compute 3-Phase Electrical Load Balance
   const electricalData = useMemo(() => {
@@ -507,6 +538,198 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              {/* ASHRAE 55 / ISO 7730 THERMAL COMFORT PMV / PPD ANALYTICS */}
+              <div style={{
+                backgroundColor: '#0F172A',
+                border: '1px solid #1E293B',
+                borderRadius: '8px',
+                padding: '16px',
+                marginTop: '20px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>
+                      🌡️ ASHRAE Standard 55 & ISO 7730 Thermal Comfort Analytics (PMV / PPD)
+                    </h4>
+                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                      Fanger Thermal Comfort Equation • Predicted Mean Vote & Dissatisfied Percentage
+                    </span>
+                  </div>
+                  <span style={{
+                    backgroundColor: thermalComfort.status === 'OPTIMAL' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.2)',
+                    color: thermalComfort.status === 'OPTIMAL' ? '#34D399' : '#38BDF8',
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    fontSize: '10.5px',
+                    fontWeight: 700
+                  }}>
+                    {thermalComfort.category}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                  <div style={{ backgroundColor: '#1E293B', padding: '12px', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600 }}>PREDICTED MEAN VOTE (PMV)</div>
+                    <div style={{ fontSize: '22px', fontWeight: 800, color: Math.abs(thermalComfort.pmv) <= 0.2 ? '#10B981' : '#38BDF8', marginTop: '2px' }}>
+                      {thermalComfort.pmv > 0 ? `+${thermalComfort.pmv}` : thermalComfort.pmv}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#CBD5E1', marginTop: '2px' }}>
+                      Sensation: <strong>{thermalComfort.sensation}</strong>
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: '#1E293B', padding: '12px', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600 }}>DISSATISFIED PERCENTAGE (PPD)</div>
+                    <div style={{ fontSize: '22px', fontWeight: 800, color: thermalComfort.ppd <= 10.0 ? '#10B981' : '#F59E0B', marginTop: '2px' }}>
+                      {thermalComfort.ppd}%
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#CBD5E1', marginTop: '2px' }}>
+                      {100 - thermalComfort.ppd}% Satisfied Occupants
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: '#1E293B', padding: '12px', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600 }}>CLOTHING INSULATION (Icl)</div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: '#FCD34D', marginTop: '2px' }}>
+                      {thermalParams.clo} clo
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setThermalParams(p => ({ ...p, clo: 0.5 }))}
+                        style={{
+                          backgroundColor: thermalParams.clo === 0.5 ? '#38BDF8' : '#0F172A',
+                          color: thermalParams.clo === 0.5 ? '#0F172A' : '#94A3B8',
+                          border: 'none',
+                          borderRadius: '3px',
+                          padding: '2px 6px',
+                          fontSize: '9.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Summer (0.5)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setThermalParams(p => ({ ...p, clo: 0.7 }))}
+                        style={{
+                          backgroundColor: thermalParams.clo === 0.7 ? '#38BDF8' : '#0F172A',
+                          color: thermalParams.clo === 0.7 ? '#0F172A' : '#94A3B8',
+                          border: 'none',
+                          borderRadius: '3px',
+                          padding: '2px 6px',
+                          fontSize: '9.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Office (0.7)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setThermalParams(p => ({ ...p, clo: 1.0 }))}
+                        style={{
+                          backgroundColor: thermalParams.clo === 1.0 ? '#38BDF8' : '#0F172A',
+                          color: thermalParams.clo === 1.0 ? '#0F172A' : '#94A3B8',
+                          border: 'none',
+                          borderRadius: '3px',
+                          padding: '2px 6px',
+                          fontSize: '9.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Winter (1.0)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: '#1E293B', padding: '12px', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600 }}>SETPOINT TEMPERATURE (Ta)</div>
+                    <div style={{ fontSize: '18px', fontWeight: 800, color: '#38BDF8', marginTop: '2px' }}>
+                      {thermalParams.ta}°C
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                      {[23.0, 24.0, 25.0, 26.0].map(temp => (
+                        <button
+                          key={temp}
+                          type="button"
+                          onClick={() => setThermalParams(p => ({ ...p, ta: temp, tr: temp }))}
+                          style={{
+                            backgroundColor: thermalParams.ta === temp ? '#10B981' : '#0F172A',
+                            color: thermalParams.ta === temp ? '#FFFFFF' : '#94A3B8',
+                            border: 'none',
+                            borderRadius: '3px',
+                            padding: '2px 6px',
+                            fontSize: '9.5px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {temp}°
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* SMACNA & ASHRAE PARAMETRIC DUCT FITTINGS & FAN STATIC PRESSURE */}
+              <div style={{
+                backgroundColor: '#0F172A',
+                border: '1px solid #1E293B',
+                borderRadius: '8px',
+                padding: '16px',
+                marginTop: '20px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>
+                      🌪️ SMACNA & ASHRAE Parametric Duct Fittings & Fan External Static Pressure (ESP)
+                    </h4>
+                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                      Dynamic Fitting Loss Coefficients (Co) • Supply Fan Static Pressure & Motor BHP Sizing
+                    </span>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ color: '#FCD34D', fontWeight: 800, fontSize: '14px' }}>
+                      {fittingsData.totalFanStaticPressurePa} Pa
+                    </span>
+                    <span style={{ color: '#94A3B8', fontSize: '11px', marginLeft: '6px' }}>
+                      ({fittingsData.totalFanStaticPressureInWg} in. w.g. • {fittingsData.fanBhp} BHP)
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#1E293B', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                        <th style={{ padding: '8px 10px' }}>Fitting Tag</th>
+                        <th style={{ padding: '8px 10px' }}>Description / Fitting Type</th>
+                        <th style={{ padding: '8px 10px' }}>Standard</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Loss Coeff (Co)</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Velocity (m/s)</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Pressure Loss (Pa)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fittingsData.fittings.map((fit, idx) => (
+                        <tr key={fit.id} style={{ borderBottom: '1px solid #1E293B', backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)' }}>
+                          <td style={{ padding: '8px 10px', fontWeight: 700, color: '#38BDF8' }}>{fit.id}</td>
+                          <td style={{ padding: '8px 10px', color: '#F1F5F9' }}>{fit.type}</td>
+                          <td style={{ padding: '8px 10px', color: '#94A3B8', fontSize: '10px' }}>{fit.standard}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', color: '#CBD5E1' }}>{fit.lossCoeffCo}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', color: '#FCD34D' }}>{fit.velocityMs} m/s</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>{fit.lossPa} Pa</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
