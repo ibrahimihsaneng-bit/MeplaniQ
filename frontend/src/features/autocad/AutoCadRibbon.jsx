@@ -14,6 +14,8 @@ export default function AutoCadRibbon({
   isEngineeringPanelOpen,
   showThermalHeatmap = false,
   onToggleThermalHeatmap,
+  is3DViewActive = false,
+  onToggle3DView,
   onAutoDimensionAll,
   onInsertScheduleTable,
   onInsertTitleBlock,
@@ -252,6 +254,28 @@ export default function AutoCadRibbon({
           >
             <span>🌡️</span>
             <span>Heatmap</span>
+          </button>
+
+          {/* 3D Spatial BIM Extrusion View Toggle */}
+          <button
+            type="button"
+            onClick={onToggle3DView}
+            title="Toggle 3D Spatial BIM Extrusion & Axonometric View (3D / ISO / ORBIT)"
+            style={{
+              background: is3DViewActive ? '#0284C7' : '#1E293B',
+              border: `1px solid ${is3DViewActive ? '#38BDF8' : '#334155'}`,
+              color: is3DViewActive ? '#FFFFFF' : '#38BDF8',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <span>🧊</span>
+            <span>3D View</span>
           </button>
 
           {/* Insert Architectural Schedule Table Button */}

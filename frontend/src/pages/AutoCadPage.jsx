@@ -8,6 +8,7 @@ import AutoCadLayerManager from '../features/autocad/AutoCadLayerManager';
 import AutoCadPropertiesPanel from '../features/autocad/AutoCadPropertiesPanel';
 import AutoCadBlockLibrary from '../features/autocad/AutoCadBlockLibrary';
 import AutoCadEngineeringPanel from '../features/autocad/AutoCadEngineeringPanel';
+import AutoCad3DViewport from '../features/autocad/AutoCad3DViewport';
 import { useCadDraftingStore } from '../features/autocad/useCadDraftingStore';
 import {
   extractRoomsFromLinework,
@@ -77,6 +78,7 @@ export default function AutoCadPage() {
   const [isEngineeringPanelOpen, setIsEngineeringPanelOpen] = useState(false);
   const [showWallDimensions, setShowWallDimensions] = useState(true);
   const [showThermalHeatmap, setShowThermalHeatmap] = useState(false);
+  const [is3DViewActive, setIs3DViewActive] = useState(false);
   const [activeBlockToPlace, setActiveBlockToPlace] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [isConverting, setIsConverting] = useState(false);
@@ -580,6 +582,21 @@ export default function AutoCadPage() {
         appendHistory(`ASHRAE Thermal Comfort Heatmap: ${!showThermalHeatmap ? 'ON' : 'OFF'}`);
         break;
 
+      case '3D':
+      case 'ISO':
+      case 'ORBIT':
+      case 'AXO':
+      case 'EXTRUDE':
+        setIs3DViewActive(true);
+        appendHistory("Toggled 3D Spatial BIM Axonometric Extrusion View.");
+        break;
+
+      case 'PLAN':
+      case '2D':
+        setIs3DViewActive(false);
+        appendHistory("Switched to 2D Plan View.");
+        break;
+
       case 'AUTODIM':
       case 'DIMALL':
         handleAutoDimensionAll();
@@ -852,6 +869,8 @@ export default function AutoCadPage() {
         onToggleWallDimensions={() => setShowWallDimensions(prev => !prev)}
         showThermalHeatmap={showThermalHeatmap}
         onToggleThermalHeatmap={() => setShowThermalHeatmap(prev => !prev)}
+        is3DViewActive={is3DViewActive}
+        onToggle3DView={() => setIs3DViewActive(prev => !prev)}
         onAutoDimensionAll={handleAutoDimensionAll}
         onInsertScheduleTable={handleInsertScheduleTable}
         onInsertTitleBlock={handleInsertTitleBlock}
@@ -896,6 +915,15 @@ export default function AutoCadPage() {
           showThermalHeatmap={showThermalHeatmap}
           containerRef={containerRef}
         />
+
+        {/* 3D Spatial BIM Axonometric Extrusion Viewport */}
+        {is3DViewActive && (
+          <AutoCad3DViewport
+            entities={entities}
+            detectedRooms={detectedRooms}
+            onClose={() => setIs3DViewActive(false)}
+          />
+        )}
 
         {/* Floating Selection Quick-Action Palette */}
         {selectedIds.length > 0 && (
