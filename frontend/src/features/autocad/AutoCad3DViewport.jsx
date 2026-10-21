@@ -402,7 +402,12 @@ export default function AutoCad3DViewport({
       }}
     >
       {/* 3D Model Render Canvas */}
-      <svg width="100%" height="100%" style={{ display: 'block' }}>
+      <svg
+        width="100%"
+        height="100%"
+        shapeRendering={isOrbiting || isPanning ? "optimizeSpeed" : "geometricPrecision"}
+        style={{ display: 'block', willChange: isOrbiting ? 'contents' : 'auto' }}
+      >
         <defs>
           <linearGradient id="sky-gradient" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#0B132B" />

@@ -1348,6 +1348,9 @@ export default function Canvas({
         ref={svgRef}
         className={`cad-canvas ${isPanning ? 'panning' : ''}`}
         width="100%" height="100%"
+        shapeRendering={isPanning || dragState ? "optimizeSpeed" : "geometricPrecision"}
+        textRendering="geometricPrecision"
+        style={{ willChange: isPanning ? 'transform' : 'auto' }}
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
