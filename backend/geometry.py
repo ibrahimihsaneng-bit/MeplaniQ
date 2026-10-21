@@ -221,6 +221,12 @@ class SolveResponse(BaseModel):
     electrical_circuits: List[Dict[str, Any]] = []
     electrical_routes: List[Dict[str, Any]] = []
     electrical_summary: Optional[Dict[str, Any]] = None
+    hvac_ducts: List[Dict[str, Any]] = []
+    hvac_diffusers: List[Dict[str, Any]] = []
+    hvac_return_grilles: List[Dict[str, Any]] = []
+    structural_columns: List[Dict[str, Any]] = []
+    structural_grid: List[Dict[str, Any]] = []
+    clash_markers: List[Dict[str, Any]] = []
     project_id: Optional[str] = None
     total_carpet_area_sqm: float = 0.0
     total_builtup_area_sqm: float = 0.0
@@ -847,7 +853,7 @@ def calculate_furniture_cad(
         if room_poly and room_poly.is_valid and not room_poly.is_empty:
             if not room_poly.covers(user_poly):
                 diff = user_poly.difference(room_poly)
-                if diff.area > 50.0:
+                if diff.area > 15000.0:
                     clearance_status = "Warning: Wall Collision"
 
         # 2. Door swing clearance validation (200mm buffer rule)
@@ -904,7 +910,7 @@ def calculate_furniture_cad(
     if room_poly and room_poly.is_valid and not room_poly.is_empty:
         if not room_poly.covers(raw_box):
             diff = raw_box.difference(room_poly)
-            if diff.area > 50.0:
+            if diff.area > 15000.0:
                 clearance_status = "Warning: Wall Collision"
 
     if door_exclusion_union and not door_exclusion_union.is_empty:

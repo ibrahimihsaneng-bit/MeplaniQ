@@ -96,54 +96,106 @@ def generate_circuit_routes(
         route_counter += 1
         current_source_id = switch_id
 
-    # Daisy-chain the loads
-    remaining = list(connected_ids)
-    # If switch is among connected loads, start from switch
-    if current_source_id in remaining:
-        remaining.remove(current_source_id)
+    # Check if components span multiple distinct rooms
+    room_groups: Dict[str, List[str]] = {}
+    for cid in connected_ids:
+        r_name = comp_map[cid].get("host_room_name") or comp_map[cid].get("host_room_id") or "default"
+        room_groups.setdefault(r_name, []).append(cid)
 
-    curr_id = current_source_id
-    while remaining:
-        if curr_id and curr_id in comp_map:
-            curr_pos = [comp_map[curr_id].get("x", 0.0), comp_map[curr_id].get("y", 0.0)]
-            # Find nearest neighbor in remaining
-            nearest_id = min(
-                remaining,
-                key=lambda cid: compute_manhattan_distance(
-                    curr_pos,
-                    [comp_map[cid].get("x", 0.0), comp_map[cid].get("y", 0.0)]
+    # Single-room circuit or synthetic unit test: standard nearest-neighbor daisy-chain
+    if len(room_groups) <= 1:
+        remaining = list(connected_ids)
+        if current_source_id in remaining:
+            remaining.remove(current_source_id)
+
+        curr_id = current_source_id
+        while remaining:
+            if curr_id and curr_id in comp_map:
+                curr_pos = [comp_map[curr_id].get("x", 0.0), comp_map[curr_id].get("y", 0.0)]
+                nearest_id = min(
+                    remaining,
+                    key=lambda cid: compute_manhattan_distance(
+                        curr_pos,
+                        [comp_map[cid].get("x", 0.0), comp_map[cid].get("y", 0.0)]
+                    )
                 )
-            )
-        else:
-            # First item as root
-            nearest_id = remaining[0]
+            else:
+                nearest_id = remaining[0]
+                curr_id = nearest_id
+                remaining.remove(nearest_id)
+                continue
+
+            next_comp = comp_map[nearest_id]
+            p_start = [comp_map[curr_id].get("x", 0.0), comp_map[curr_id].get("y", 0.0)]
+            p_end = [next_comp.get("x", 0.0), next_comp.get("y", 0.0)]
+            
+            prefer_x = (route_counter % 2 == 0)
+            pts = orthogonal_route(p_start, p_end, prefer_x_first=prefer_x)
+            length = compute_polyline_length(pts)
+
+            routes.append({
+                "id": f"WR-{circuit_id}-{route_counter}",
+                "circuit_id": circuit_id,
+                "from_component_id": curr_id,
+                "to_component_id": nearest_id,
+                "conduit_type": conduit_type,
+                "conductors": ["phase", "neutral", "earth"],
+                "points": pts,
+                "length_mm": length,
+                "is_auto_generated": True,
+                "properties": {"role": "load_interconnect"}
+            })
+            route_counter += 1
             curr_id = nearest_id
             remaining.remove(nearest_id)
-            continue
+    else:
+        # Multi-room circuit: isolate conduit routing per room to avoid crossing furniture & partition walls!
+        for r_name, r_cids in room_groups.items():
+            r_switch = next((cid for cid in r_cids if "switch" in comp_map[cid].get("type", "").lower()), None)
+            local_root = r_switch or r_cids[0]
 
-        next_comp = comp_map[nearest_id]
-        p_start = [comp_map[curr_id].get("x", 0.0), comp_map[curr_id].get("y", 0.0)]
-        p_end = [next_comp.get("x", 0.0), next_comp.get("y", 0.0)]
-        
-        # Alternate x_first based on step to give natural conduit flow
-        prefer_x = (route_counter % 2 == 0)
-        pts = orthogonal_route(p_start, p_end, prefer_x_first=prefer_x)
-        length = compute_polyline_length(pts)
+            # Feeder drop from DB to room root
+            if source_db_id and source_db_id in comp_map and local_root != source_db_id:
+                p_db = [comp_map[source_db_id].get("x", 0.0), comp_map[source_db_id].get("y", 0.0)]
+                p_root = [comp_map[local_root].get("x", 0.0), comp_map[local_root].get("y", 0.0)]
+                pts = orthogonal_route(p_db, p_root, prefer_x_first=True)
+                routes.append({
+                    "id": f"WR-{circuit_id}-{route_counter}",
+                    "circuit_id": circuit_id,
+                    "from_component_id": source_db_id,
+                    "to_component_id": local_root,
+                    "conduit_type": "slab_conduit",
+                    "conductors": ["phase", "neutral", "earth"],
+                    "points": pts,
+                    "length_mm": compute_polyline_length(pts),
+                    "is_auto_generated": True,
+                    "properties": {"role": f"feeder_to_{r_name}"}
+                })
+                route_counter += 1
 
-        routes.append({
-            "id": f"WR-{circuit_id}-{route_counter}",
-            "circuit_id": circuit_id,
-            "from_component_id": curr_id,
-            "to_component_id": nearest_id,
-            "conduit_type": conduit_type,
-            "conductors": ["phase", "neutral", "earth"],
-            "points": pts,
-            "length_mm": length,
-            "is_auto_generated": True,
-            "properties": {"role": "load_interconnect"}
-        })
-        route_counter += 1
-        curr_id = nearest_id
-        remaining.remove(nearest_id)
+            # Chain remaining loads within THIS room only
+            rem = [cid for cid in r_cids if cid != local_root]
+            c_curr = local_root
+            while rem:
+                c_pos = [comp_map[c_curr].get("x", 0.0), comp_map[c_curr].get("y", 0.0)]
+                near_id = min(rem, key=lambda cid: compute_manhattan_distance(c_pos, [comp_map[cid].get("x", 0.0), comp_map[cid].get("y", 0.0)]))
+                p_start = c_pos
+                p_end = [comp_map[near_id].get("x", 0.0), comp_map[near_id].get("y", 0.0)]
+                pts = orthogonal_route(p_start, p_end, prefer_x_first=(route_counter % 2 == 0))
+                routes.append({
+                    "id": f"WR-{circuit_id}-{route_counter}",
+                    "circuit_id": circuit_id,
+                    "from_component_id": c_curr,
+                    "to_component_id": near_id,
+                    "conduit_type": conduit_type,
+                    "conductors": ["phase", "neutral", "earth"],
+                    "points": pts,
+                    "length_mm": compute_polyline_length(pts),
+                    "is_auto_generated": True,
+                    "properties": {"role": "room_local_branch", "room": r_name}
+                })
+                route_counter += 1
+                c_curr = near_id
+                rem.remove(near_id)
 
     return routes
