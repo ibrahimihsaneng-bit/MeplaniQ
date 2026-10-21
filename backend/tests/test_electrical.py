@@ -301,3 +301,45 @@ def test_project_update_endpoint_preserves_electrical():
     assert len(db_cad.get("electrical_circuits", [])) == 1
     assert db_cad["electrical_circuits"][0]["id"] == "CKT-TEST-1"
 
+
+def test_iec60364_voltage_drop_calculation():
+    """Verifies IEC 60364-5-52 cable voltage drop calculations and auto-upsizing logic."""
+    from backend.electrical.circuits import calculate_voltage_drop, verify_circuit_voltage_drop
+
+    # Normal lighting circuit: 400W, 18m run, 1.5mm2 Cu
+    res = calculate_voltage_drop(load_w=400.0, length_m=18.0, wire_gauge_sqmm=1.5)
+    assert res["v_drop_percent"] < 3.0
+    assert res["v_drop_v"] > 0
+    assert res["current_a"] == pytest.approx(2.05, rel=1e-1)
+
+    # Compliant check via verify_circuit_voltage_drop
+    check = verify_circuit_voltage_drop({"category": "lighting", "total_load_w": 400.0, "wire_gauge_sqmm": 1.5}, length_m=18.0)
+    assert check["is_compliant"] is True
+    assert check["upsize_required"] is False
+    assert check["recommended_wire_gauge_sqmm"] == 1.5
+
+    # Long high-load circuit exceeding limit -> must recommend upsized conductor
+    long_heavy = verify_circuit_voltage_drop(
+        {"category": "heavy_socket", "total_load_w": 2800.0, "wire_gauge_sqmm": 2.5},
+        length_m=42.0
+    )
+    # At 2800W / 42m on 2.5mm2 (18 mV/A/m): Vd = (18 * 14.32 * 42) / 1000 = 10.82V = 4.7%
+    # On 1.5mm2 (29 mV/A/m): Vd = 17.43V = 7.58% > 5.0%
+    exceeding = verify_circuit_voltage_drop(
+        {"category": "heavy_socket", "total_load_w": 2800.0, "wire_gauge_sqmm": 1.5},
+        length_m=42.0
+    )
+    assert exceeding["is_compliant"] is False
+    assert exceeding["upsize_required"] is True
+    assert exceeding["recommended_wire_gauge_sqmm"] >= 2.5
+
+    # Extreme length (65m) requiring 4.0mm2 or larger
+    extreme_run = verify_circuit_voltage_drop(
+        {"category": "heavy_socket", "total_load_w": 2800.0, "wire_gauge_sqmm": 1.5},
+        length_m=65.0
+    )
+    assert extreme_run["is_compliant"] is False
+    assert extreme_run["upsize_required"] is True
+    assert extreme_run["recommended_wire_gauge_sqmm"] >= 4.0
+
+

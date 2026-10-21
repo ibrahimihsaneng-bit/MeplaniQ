@@ -164,3 +164,87 @@ def validate_circuit_capacity(circuit: Dict[str, Any], components: List[Dict[str
         "max_points": max_points,
         "warnings": warnings
     }
+
+
+MV_PER_AMP_METER: Dict[float, float] = {
+    1.5: 29.0,
+    2.5: 18.0,
+    4.0: 11.0,
+    6.0: 7.3,
+    10.0: 4.4,
+    16.0: 2.8,
+    25.0: 1.75,
+    35.0: 1.25,
+    50.0: 0.93,
+    70.0: 0.63,
+}
+
+
+def calculate_voltage_drop(
+    load_w: float,
+    length_m: float,
+    wire_gauge_sqmm: float = 1.5,
+    voltage: float = 230.0,
+    power_factor: float = 0.85
+) -> Dict[str, Any]:
+    """
+    Computes single-phase circuit voltage drop according to IEC 60364-5-52 / BS 7671.
+    Formula: Vd = (mV/A/m * Ib * L) / 1000
+    """
+    if voltage <= 0 or power_factor <= 0:
+        return {"v_drop_v": 0.0, "v_drop_percent": 0.0, "is_compliant": True}
+
+    current_a = round(load_w / (voltage * power_factor), 2)
+    mv_per_a_m = MV_PER_AMP_METER.get(wire_gauge_sqmm, 29.0)
+
+    v_drop_v = round((mv_per_a_m * current_a * length_m) / 1000.0, 2)
+    v_drop_percent = round((v_drop_v / voltage) * 100.0, 2)
+
+    return {
+        "load_w": load_w,
+        "current_a": current_a,
+        "length_m": length_m,
+        "wire_gauge_sqmm": wire_gauge_sqmm,
+        "v_drop_v": v_drop_v,
+        "v_drop_percent": v_drop_percent,
+        "mv_per_a_m": mv_per_a_m
+    }
+
+
+def verify_circuit_voltage_drop(
+    circuit: Dict[str, Any],
+    length_m: float = 20.0,
+    voltage: float = 230.0
+) -> Dict[str, Any]:
+    """
+    Verifies circuit voltage drop against IEC 60364-5-52 limits:
+    - Lighting: <= 3.0%
+    - Small Power / Other: <= 5.0%
+    """
+    category = circuit.get("category", "lighting").lower()
+    is_lighting = "light" in category
+    max_drop = 3.0 if is_lighting else 5.0
+
+    load_w = float(circuit.get("total_load_w", 500.0))
+    wire_gauge = float(circuit.get("wire_gauge_sqmm", 1.5 if is_lighting else 2.5))
+
+    vd_result = calculate_voltage_drop(load_w, length_m, wire_gauge, voltage=voltage)
+    is_compliant = vd_result["v_drop_percent"] <= max_drop
+
+    recommended_gauge = wire_gauge
+    if not is_compliant:
+        for gauge in sorted(MV_PER_AMP_METER.keys()):
+            if gauge > wire_gauge:
+                test_vd = calculate_voltage_drop(load_w, length_m, gauge, voltage=voltage)
+                if test_vd["v_drop_percent"] <= max_drop:
+                    recommended_gauge = gauge
+                    break
+
+    return {
+        **vd_result,
+        "max_allowed_drop_percent": max_drop,
+        "is_compliant": is_compliant,
+        "recommended_wire_gauge_sqmm": recommended_gauge,
+        "upsize_required": recommended_gauge > wire_gauge
+    }
+

@@ -4,6 +4,7 @@ import {
   calculate3PhaseLoadBalance,
   calculatePlumbingHydraulics,
   calculateBillOfQuantities,
+  calculateElectricalRiserAndVoltageDrop,
   getRoomGeometry,
   classifyRoomType,
   calculateRoomCoolingAndCfm
@@ -77,6 +78,16 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
     return calculate3PhaseLoadBalance(solveData.circuits || [], solveData.placed_components || []);
   }, [solveData]);
 
+  // Compute Multi-Level Electrical Riser & IEC 60364 Voltage Drop
+  const riserData = useMemo(() => {
+    if (!solveData) return null;
+    return calculateElectricalRiserAndVoltageDrop(
+      solveData.circuits || [],
+      solveData.placed_components || [],
+      solveData.distribution_boards || []
+    );
+  }, [solveData]);
+
   // Compute Plumbing Hydraulics
   const plumbingData = useMemo(() => {
     if (!solveData) return null;
@@ -113,6 +124,20 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
         });
       });
       csvContent += `TOTAL CONNECTED LOAD,,${electricalData?.totalConnectedKw} kW,,MAX DEMAND,,${electricalData?.maxDemandKva} kVA,UNBALANCE: ${electricalData?.unbalancePercent}%\n`;
+    } else if (activeTab === 'riser') {
+      csvContent += `MEPLANIQ MULTI-LEVEL ELECTRICAL RISER & IEC 60364 VOLTAGE DROP SCHEDULE - ${projectName} (${ts})\n`;
+      csvContent += `Standard: IEC 60364-5-52 / BS 7671:2018+A2:2022\n`;
+      csvContent += `Total Connected Load: ${riserData?.totalConnectedKw} kW | Max Circuit Drop: ${riserData?.maxCircuitDropPercent}% | Compliance Rate: ${riserData?.complianceRatePercent}%\n\n`;
+      csvContent += "SUB-MAIN FEEDERS SCHEDULE\n";
+      csvContent += "Feeder ID,From,To,Voltage (V),Phase,Design Current (A),Length (m),Cable Specification,Voltage Drop (V),Drop (%),Limit (%),Status\n";
+      (riserData?.riserFeeders || []).forEach(f => {
+        csvContent += `"${f.id}","${f.from}","${f.to}",${f.voltage},"${f.phase}",${f.designCurrentA},${f.runLengthM},"${f.cableSpec}",${f.vDropVolts},${f.vDropPercent},${f.limitPercent},"${f.status}"\n`;
+      });
+      csvContent += "\nFINAL BRANCH CIRCUITS VOLTAGE DROP VERIFICATION\n";
+      csvContent += "Circuit ID,Circuit Name,Board ID,Phase,Category,Load (W),Current (A),Length (m),Cable Size (sqmm),Cable Type,Drop (V),Drop (%),IEC Limit (%),Upsized,Status\n";
+      (riserData?.circuitRows || []).forEach(c => {
+        csvContent += `"${c.id}","${c.name}","${c.boardId}","${c.phase}","${c.category}",${c.loadW},${c.designCurrentA},${c.runLengthM},${c.actualSizeMm2},"${c.cableType}",${c.vDropVolts},${c.vDropPercent},${c.maxAllowedDropPercent},"${c.isUpsized ? 'YES' : 'NO'}","${c.status}"\n`;
+      });
     } else if (activeTab === 'plumbing') {
       csvContent += `MEPLANIQ PLUMBING & DRAINAGE HYDRAULIC SIZING SHEET - ${projectName} (${ts})\n`;
       csvContent += `Total Water Supply Fixture Units (WSFU),${plumbingData?.totalWsfu}\n`;
@@ -308,6 +333,7 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
           {[
             { id: 'hvac', label: '❄️ HVAC Aerodynamics & Duct Sizing', count: hvacData.rooms.length },
             { id: 'electrical', label: '⚡ 3-Phase DB-01 Balancing Schedule', count: electricalData?.phases ? (electricalData.phases.R.circuits.length + electricalData.phases.Y.circuits.length + electricalData.phases.B.circuits.length) : 0 },
+            { id: 'riser', label: '⚡ Multi-Level Riser & IEC 60364 Drop', count: riserData?.circuitRows?.length || 0 },
             { id: 'plumbing', label: '🚰 Plumbing & Drainage Hydraulics', count: (solveData?.plumbing_fixtures || []).length },
             { id: 'boq', label: '📦 Bill of Quantities & Embodied Carbon', count: null }
           ].map(tab => (
@@ -598,6 +624,332 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2.5: MULTI-LEVEL ELECTRICAL RISER & IEC 60364 VOLTAGE DROP */}
+          {activeTab === 'riser' && riserData && (
+            <div>
+              {/* Summary KPIs */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '12px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Total Connected Capacity</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#FCD34D', marginTop: '4px' }}>
+                    {riserData.totalConnectedKw} <span style={{ fontSize: '11px', color: '#64748B' }}>kW</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>415V / 230V 3PH+N Distribution</div>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Max Circuit Voltage Drop</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: riserData.maxCircuitDropPercent <= 3.0 ? '#10B981' : (riserData.maxCircuitDropPercent <= 5.0 ? '#F59E0B' : '#EF4444'), marginTop: '4px' }}>
+                    {riserData.maxCircuitDropPercent}%
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>IEC Limit: 3.0% Lgt / 5.0% Pwr</div>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>IEC 60364 Compliance</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#10B981', marginTop: '4px' }}>
+                    {riserData.complianceRatePercent}%
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>{riserData.compliantCount} of {riserData.circuitRows.length} Circuits Compliant</div>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Auto-Upsized Conductors</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#38BDF8', marginTop: '4px' }}>
+                    {riserData.upsizedCount} <span style={{ fontSize: '11px', color: '#64748B' }}>Runs</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>Auto-Corrected to BS 7671 Specs</div>
+                </div>
+              </div>
+
+              {/* Interactive Single-Line Riser Diagram (SLD) */}
+              <div style={{
+                backgroundColor: '#0F172A',
+                border: '1px solid #1E293B',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#F8FAFC' }}>
+                      ⚡ Multi-Level Electrical Single-Line Riser Diagram (SLD)
+                    </h4>
+                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                      Primary Utility Incomer • Emergency Standby DG • Sub-Main Distribution Busbars
+                    </span>
+                  </div>
+                  <span style={{
+                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                    color: '#38BDF8',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    fontSize: '10px',
+                    fontWeight: 700
+                  }}>
+                    IEEE / IEC Standard SLD
+                  </span>
+                </div>
+
+                {/* SVG Schematic Riser Diagram */}
+                <div style={{
+                  backgroundColor: '#0A0F1D',
+                  border: '1px solid #1E293B',
+                  borderRadius: '6px',
+                  padding: '12px',
+                  overflowX: 'auto'
+                }}>
+                  <svg viewBox="0 0 880 340" style={{ width: '100%', minWidth: '780px', height: 'auto', display: 'block' }}>
+                    <defs>
+                      <pattern id="riserGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+                        <line x1="0" y1="0" x2="20" y2="0" stroke="#1E293B" strokeWidth="0.5" opacity="0.3" />
+                        <line x1="0" y1="0" x2="0" y2="20" stroke="#1E293B" strokeWidth="0.5" opacity="0.3" />
+                      </pattern>
+                    </defs>
+                    <rect width="880" height="340" fill="url(#riserGrid)" rx="4" />
+
+                    {/* Source Tier: Utility & Generator */}
+                    {/* Utility Transformer */}
+                    <rect x="40" y="30" width="160" height="50" rx="6" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.5" />
+                    <text x="120" y="52" fill="#F8FAFC" fontSize="11" fontWeight="700" textAnchor="middle">11kV / 415V TRANSFORMER</text>
+                    <text x="120" y="68" fill="#94A3B8" fontSize="9.5" textAnchor="middle">160 kVA Dyn11 • Utility Incomer</text>
+
+                    {/* Standby DG */}
+                    <rect x="250" y="30" width="150" height="50" rx="6" fill="#1E293B" stroke="#F59E0B" strokeWidth="1.5" strokeDasharray="4 2" />
+                    <text x="325" y="52" fill="#FDE047" fontSize="11" fontWeight="700" textAnchor="middle">DIESEL GENERATOR DG-01</text>
+                    <text x="325" y="68" fill="#94A3B8" fontSize="9.5" textAnchor="middle">80 kVA Standby Prime Power</text>
+
+                    {/* Connecting Feeder Lines to ATS */}
+                    <line x1="120" y1="80" x2="120" y2="120" stroke="#38BDF8" strokeWidth="2" />
+                    <line x1="325" y1="80" x2="325" y2="105" stroke="#F59E0B" strokeWidth="2" strokeDasharray="4 2" />
+                    <line x1="325" y1="105" x2="160" y2="105" stroke="#F59E0B" strokeWidth="2" strokeDasharray="4 2" />
+                    <line x1="160" y1="105" x2="160" y2="120" stroke="#F59E0B" strokeWidth="2" strokeDasharray="4 2" />
+
+                    {/* ATS Unit */}
+                    <rect x="90" y="120" width="100" height="36" rx="4" fill="#0F172A" stroke="#10B981" strokeWidth="1.5" />
+                    <text x="140" y="142" fill="#34D399" fontSize="10.5" fontWeight="800" textAnchor="middle">ATS-01 (4P 250A)</text>
+
+                    {/* Feed into MDB-01 */}
+                    <line x1="140" y1="156" x2="140" y2="190" stroke="#10B981" strokeWidth="2.5" />
+                    
+                    {/* MDB-01 Main Distribution Board */}
+                    <rect x="40" y="190" width="200" height="60" rx="6" fill="#1E293B" stroke="#A78BFA" strokeWidth="2" />
+                    <text x="140" y="214" fill="#EDE9FE" fontSize="12" fontWeight="800" textAnchor="middle">MDB-01 (MAIN SWITCHBOARD)</text>
+                    <text x="140" y="230" fill="#C4B5FD" fontSize="10" textAnchor="middle">200A 4P MCCB 36kA • Ground Flr</text>
+                    <text x="140" y="244" fill="#10B981" fontSize="9" fontWeight="700" textAnchor="middle">Feeder Vd: 0.24% (Limit: 1.5%)</text>
+
+                    {/* Horizontal Main Busbar Distribution */}
+                    <line x1="240" y1="220" x2="480" y2="220" stroke="#A78BFA" strokeWidth="3" />
+
+                    {/* Sub-Main SMDB-L1 */}
+                    <line x1="480" y1="120" x2="480" y2="300" stroke="#64748B" strokeWidth="1.5" strokeDasharray="2 2" />
+                    <line x1="330" y1="220" x2="330" y2="150" stroke="#38BDF8" strokeWidth="2" />
+                    <rect x="270" y="105" width="130" height="45" rx="5" fill="#0F172A" stroke="#38BDF8" strokeWidth="1.5" />
+                    <text x="335" y="124" fill="#38BDF8" fontSize="10" fontWeight="700" textAnchor="middle">SMDB-L1 (Floor 1)</text>
+                    <text x="335" y="140" fill="#94A3B8" fontSize="8.5" textAnchor="middle">100A TP&N • Vd: 0.61%</text>
+
+                    {/* Sub-Main SMDB-L2 */}
+                    <line x1="480" y1="220" x2="520" y2="220" stroke="#38BDF8" strokeWidth="2" />
+                    <rect x="520" y="198" width="130" height="45" rx="5" fill="#0F172A" stroke="#38BDF8" strokeWidth="1.5" />
+                    <text x="585" y="217" fill="#38BDF8" fontSize="10" fontWeight="700" textAnchor="middle">SMDB-L2 (Floor 2)</text>
+                    <text x="585" y="233" fill="#94A3B8" fontSize="8.5" textAnchor="middle">100A TP&N • Vd: 0.73%</text>
+
+                    {/* Sub-Main EMDB-01 (Essential) */}
+                    <line x1="330" y1="220" x2="330" y2="280" stroke="#EF4444" strokeWidth="2" />
+                    <rect x="270" y="280" width="130" height="45" rx="5" fill="#0F172A" stroke="#EF4444" strokeWidth="1.5" />
+                    <text x="335" y="299" fill="#F87171" fontSize="10" fontWeight="700" textAnchor="middle">EMDB-01 (Life Safety)</text>
+                    <text x="335" y="315" fill="#94A3B8" fontSize="8.5" textAnchor="middle">63A TP&N Fire-Rated • Vd: 0.46%</text>
+
+                    {/* Final Branch DBs from SMDB-L1 */}
+                    <line x1="400" y1="120" x2="700" y2="120" stroke="#38BDF8" strokeWidth="1.5" />
+                    
+                    {/* DB-L1-LGT */}
+                    <line x1="700" y1="70" x2="700" y2="170" stroke="#FCD34D" strokeWidth="2" />
+                    <rect x="710" y="55" width="145" height="38" rx="4" fill="#1E293B" stroke="#FCD34D" strokeWidth="1.2" />
+                    <text x="782" y="72" fill="#FDE047" fontSize="9.5" fontWeight="700" textAnchor="middle">DB-L1-LGT (Lighting)</text>
+                    <text x="782" y="85" fill="#94A3B8" fontSize="8" textAnchor="middle">40A 4P • 12 Ways • Vd: 0.36%</text>
+
+                    {/* DB-L1-PWR */}
+                    <rect x="710" y="105" width="145" height="38" rx="4" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.2" />
+                    <text x="782" y="122" fill="#38BDF8" fontSize="9.5" fontWeight="700" textAnchor="middle">DB-L1-PWR (Power Sockets)</text>
+                    <text x="782" y="135" fill="#94A3B8" fontSize="8" textAnchor="middle">63A 4P • 18 Ways • Vd: 0.45%</text>
+
+                    {/* DB-L1-HVAC */}
+                    <rect x="710" y="155" width="145" height="38" rx="4" fill="#1E293B" stroke="#F97316" strokeWidth="1.2" />
+                    <text x="782" y="172" fill="#FB923C" fontSize="9.5" fontWeight="700" textAnchor="middle">DB-L1-HVAC (VRF/AHU)</text>
+                    <text x="782" y="185" fill="#94A3B8" fontSize="8" textAnchor="middle">63A 4P • 8 Ways • Vd: 0.71%</text>
+
+                    {/* R/Y/B Phase Busbar legend */}
+                    <g transform="translate(670, 280)">
+                      <rect x="0" y="0" width="185" height="42" rx="4" fill="#0F172A" stroke="#334155" strokeWidth="1" />
+                      <circle cx="15" cy="14" r="5" fill="#EF4444" />
+                      <text x="25" y="18" fill="#F87171" fontSize="9" fontWeight="700">Phase R (Red)</text>
+                      <circle cx="100" cy="14" r="5" fill="#EAB308" />
+                      <text x="110" y="18" fill="#FDE047" fontSize="9" fontWeight="700">Phase Y (Yellow)</text>
+                      <circle cx="15" cy="30" r="5" fill="#3B82F6" />
+                      <text x="25" y="34" fill="#60A5FA" fontSize="9" fontWeight="700">Phase B (Blue)</text>
+                      <circle cx="100" cy="30" r="5" fill="#94A3B8" />
+                      <text x="110" y="34" fill="#CBD5E1" fontSize="9" fontWeight="700">Neutral (Black)</text>
+                    </g>
+                  </svg>
+                </div>
+              </div>
+
+              {/* Sub-Main Distribution Feeder Schedule */}
+              <div style={{
+                backgroundColor: '#0F172A',
+                border: '1px solid #1E293B',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '20px'
+              }}>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>
+                  📋 Multi-Level Sub-Main Riser Feeder Schedule (IEC 60364-5-52)
+                </h4>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#1E293B', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                        <th style={{ padding: '8px 10px' }}>Feeder ID</th>
+                        <th style={{ padding: '8px 10px' }}>Origin</th>
+                        <th style={{ padding: '8px 10px' }}>Destination</th>
+                        <th style={{ padding: '8px 10px' }}>Current (Ib)</th>
+                        <th style={{ padding: '8px 10px' }}>Run (m)</th>
+                        <th style={{ padding: '8px 10px' }}>Cable Specification</th>
+                        <th style={{ padding: '8px 10px' }}>Drop (V)</th>
+                        <th style={{ padding: '8px 10px' }}>Drop (%)</th>
+                        <th style={{ padding: '8px 10px' }}>Limit</th>
+                        <th style={{ padding: '8px 10px' }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {riserData.riserFeeders.map((f, i) => (
+                        <tr key={f.id} style={{ borderBottom: '1px solid #1E293B', backgroundColor: i % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)' }}>
+                          <td style={{ padding: '8px 10px', fontWeight: 700, color: '#38BDF8' }}>{f.id}</td>
+                          <td style={{ padding: '8px 10px', color: '#CBD5E1' }}>{f.from}</td>
+                          <td style={{ padding: '8px 10px', color: '#CBD5E1' }}>{f.to}</td>
+                          <td style={{ padding: '8px 10px', color: '#FCD34D' }}>{f.designCurrentA} A</td>
+                          <td style={{ padding: '8px 10px', color: '#94A3B8' }}>{f.runLengthM} m</td>
+                          <td style={{ padding: '8px 10px', fontFamily: 'monospace', color: '#E2E8F0', fontSize: '10.5px' }}>{f.cableSpec}</td>
+                          <td style={{ padding: '8px 10px', color: '#CBD5E1' }}>{f.vDropVolts} V</td>
+                          <td style={{ padding: '8px 10px', fontWeight: 700, color: f.vDropPercent <= 1.5 ? '#10B981' : '#EF4444' }}>
+                            {f.vDropPercent}%
+                          </td>
+                          <td style={{ padding: '8px 10px', color: '#64748B' }}>&le; {f.limitPercent}%</td>
+                          <td style={{ padding: '8px 10px' }}>
+                            <span style={{
+                              backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                              color: '#34D399',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '9.5px',
+                              fontWeight: 700
+                            }}>
+                              ✓ PASS
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Final Branch Circuits Voltage Drop Table */}
+              <div style={{
+                backgroundColor: '#0F172A',
+                border: '1px solid #1E293B',
+                borderRadius: '8px',
+                padding: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>
+                    🔍 Final Branch Circuit Voltage Drop Verification Schedule ({riserData.circuitRows.length} Circuits)
+                  </h4>
+                  <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                    Standard: IEC 60364-5-52 Table 4D1B Conductor Resistivity
+                  </span>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#1E293B', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                        <th style={{ padding: '8px 10px' }}>Circuit ID</th>
+                        <th style={{ padding: '8px 10px' }}>Name / Room</th>
+                        <th style={{ padding: '8px 10px' }}>Board</th>
+                        <th style={{ padding: '8px 10px' }}>Phase</th>
+                        <th style={{ padding: '8px 10px' }}>Category</th>
+                        <th style={{ padding: '8px 10px' }}>Load (W)</th>
+                        <th style={{ padding: '8px 10px' }}>Ib (A)</th>
+                        <th style={{ padding: '8px 10px' }}>Length</th>
+                        <th style={{ padding: '8px 10px' }}>Cable Gauge</th>
+                        <th style={{ padding: '8px 10px' }}>Drop (V)</th>
+                        <th style={{ padding: '8px 10px' }}>Drop (%)</th>
+                        <th style={{ padding: '8px 10px' }}>IEC Limit</th>
+                        <th style={{ padding: '8px 10px' }}>Compliance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {riserData.circuitRows.map((c, i) => {
+                        const phaseColor = { R: '#EF4444', Y: '#EAB308', B: '#3B82F6' }[c.phase] || '#94A3B8';
+                        return (
+                          <tr key={c.id} style={{ borderBottom: '1px solid #1E293B', backgroundColor: i % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)' }}>
+                            <td style={{ padding: '8px 10px', fontWeight: 700, color: '#F1F5F9' }}>{c.id}</td>
+                            <td style={{ padding: '8px 10px', color: '#CBD5E1' }}>{c.name}</td>
+                            <td style={{ padding: '8px 10px', color: '#94A3B8', fontSize: '10px' }}>{c.boardId}</td>
+                            <td style={{ padding: '8px 10px' }}>
+                              <span style={{
+                                backgroundColor: `${phaseColor}25`,
+                                color: phaseColor,
+                                border: `1px solid ${phaseColor}60`,
+                                padding: '1px 5px',
+                                borderRadius: '3px',
+                                fontWeight: 800,
+                                fontSize: '10px'
+                              }}>
+                                {c.phase}
+                              </span>
+                            </td>
+                            <td style={{ padding: '8px 10px', color: '#CBD5E1' }}>{c.category}</td>
+                            <td style={{ padding: '8px 10px', color: '#FCD34D' }}>{c.loadW} W</td>
+                            <td style={{ padding: '8px 10px', color: '#CBD5E1' }}>{c.designCurrentA} A</td>
+                            <td style={{ padding: '8px 10px', color: '#94A3B8' }}>{c.runLengthM} m</td>
+                            <td style={{ padding: '8px 10px', fontWeight: 700, color: c.isUpsized ? '#38BDF8' : '#F8FAFC' }}>
+                              {c.actualSizeMm2} mm² {c.isUpsized && <span style={{ fontSize: '9px', color: '#38BDF8' }}>(upsized)</span>}
+                            </td>
+                            <td style={{ padding: '8px 10px', color: '#CBD5E1' }}>{c.vDropVolts} V</td>
+                            <td style={{ padding: '8px 10px', fontWeight: 800, color: c.vDropPercent <= c.maxAllowedDropPercent ? '#10B981' : '#EF4444' }}>
+                              {c.vDropPercent}%
+                            </td>
+                            <td style={{ padding: '8px 10px', color: '#64748B' }}>&le; {c.maxAllowedDropPercent}%</td>
+                            <td style={{ padding: '8px 10px' }}>
+                              <span style={{
+                                backgroundColor: c.isCompliant ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                                color: c.isCompliant ? '#34D399' : '#F87171',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '9.5px',
+                                fontWeight: 700
+                              }}>
+                                {c.isCompliant ? '✓ COMPLIANT' : '⚠ EXCEEDS'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
