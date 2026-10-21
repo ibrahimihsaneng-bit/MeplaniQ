@@ -79,9 +79,21 @@ export default function AutoCadCanvas({
   // Fillet state: first selected segment
   const [filletFirstEntity, setFilletFirstEntity] = useState(null);
 
-  // Transform entities into mitered walls for seamless corner rendering
-  const walls = useMemo(() => entities.filter(e => e.type === 'wall'), [entities]);
-  const otherEntities = useMemo(() => entities.filter(e => e.type !== 'wall'), [entities]);
+  // Layer visibility & color lookup maps
+  const hiddenLayerIds = useMemo(() => new Set((layers || []).filter(l => l.visible === false).map(l => l.id)), [layers]);
+  const layerColorMap = useMemo(() => {
+    const map = {};
+    (layers || []).forEach(l => { map[l.id] = l.color; });
+    return map;
+  }, [layers]);
+
+  // Transform entities into mitered walls for seamless corner rendering (respecting layer visibility)
+  const visibleEntities = useMemo(() => {
+    return entities.filter(e => e.visible !== false && !hiddenLayerIds.has(e.layer || '0'));
+  }, [entities, hiddenLayerIds]);
+
+  const walls = useMemo(() => visibleEntities.filter(e => e.type === 'wall'), [visibleEntities]);
+  const otherEntities = useMemo(() => visibleEntities.filter(e => e.type !== 'wall'), [visibleEntities]);
   const miteredWalls = useMemo(() => calculateMiteredWallNetwork(walls, 70), [walls]);
 
   // Live real-time closed-room boundary detection and area calculation
@@ -992,7 +1004,7 @@ export default function AutoCadCanvas({
           {/* 1. SEAMLESS MITERED ARCHITECTURAL WALLS */}
           {miteredWalls.map((wall, wIdx) => {
             const isSelected = selectedIds.includes(wall.id);
-            const wallColor = isSelected ? '#FACC15' : (wall.color || '#38BDF8');
+            const wallColor = isSelected ? '#FACC15' : (wall.color || layerColorMap[wall.layer] || '#38BDF8');
             const strokeW = (isSelected ? 2.2 : 1.8) / zoom;
             const poly = wall.miteredPolygon || wall.polygon;
             if (!poly || poly.length < 4) return null;
@@ -1087,7 +1099,7 @@ export default function AutoCadCanvas({
           {otherEntities.map((ent, eIdx) => {
             const entKey = ent.id || `cad-ent-${eIdx}`;
             const isSelected = selectedIds.includes(ent.id);
-            const entColor = isSelected ? '#FACC15' : (ent.color || '#FFFFFF');
+            const entColor = isSelected ? '#FACC15' : (ent.color || layerColorMap[ent.layer] || '#FFFFFF');
             const strokeW = (isSelected ? 2.5 : 1.5) / zoom;
 
             if (ent.type === 'line' && ent.p1 && ent.p2) {

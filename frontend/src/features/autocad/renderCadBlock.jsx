@@ -200,6 +200,100 @@ export function renderCadBlock(ent, isSelected, zoom) {
       );
     }
 
+    // 10. STUDY DESK WITH CHAIR & LAPTOP
+    if (blockId.includes('desk') || ent.name?.toLowerCase().includes('desk')) {
+      const chairR = Math.min(220, bw * 0.2);
+      return (
+        <g>
+          {/* Desk Surface */}
+          <rect x={0} y={0} width={bw} height={bh} rx={8 / zoom} fill={fillColor} stroke={strokeColor} strokeWidth={strokeW} />
+          {/* Laptop Monitor */}
+          <rect x={(bw - 320) / 2} y={bh * 0.25} width={320} height={200} rx={4 / zoom} fill="#0F172A" stroke={detailColor} strokeWidth={thinW} />
+          <line x1={(bw - 320) / 2} y1={bh * 0.25 + 160} x2={(bw + 320) / 2} y2={bh * 0.25 + 160} stroke={detailColor} strokeWidth={thinW} />
+          {/* Swivel Chair behind desk */}
+          <circle cx={bw / 2} cy={bh * 0.82} r={chairR} fill="#1E293B" stroke={strokeColor} strokeWidth={strokeW} />
+          <path d={`M ${bw / 2 - chairR * 0.8} ${bh * 0.82} A ${chairR * 0.8} ${chairR * 0.8} 0 0 1 ${bw / 2 + chairR * 0.8} ${bh * 0.82}`} fill="none" stroke={detailColor} strokeWidth={thinW * 1.5} />
+        </g>
+      );
+    }
+
+    // 11. SHOWER CABIN
+    if (blockId.includes('shower') || ent.name?.toLowerCase().includes('shower')) {
+      return (
+        <g>
+          {/* Outer Glass Tray */}
+          <rect x={0} y={0} width={bw} height={bh} rx={12 / zoom} fill={fillColor} stroke={strokeColor} strokeWidth={strokeW} />
+          {/* Drain in center */}
+          <circle cx={bw / 2} cy={bh / 2} r={35 / zoom} fill="#0F172A" stroke={strokeColor} strokeWidth={strokeW} />
+          <circle cx={bw / 2} cy={bh / 2} r={12 / zoom} fill="#64748B" />
+          {/* Corner Showerhead Arc */}
+          <circle cx={bw * 0.18} cy={bh * 0.18} r={24 / zoom} fill={detailColor} />
+          <line x1={0} y1={0} x2={bw} y2={bh} stroke={detailColor} strokeWidth={thinW} strokeDasharray={`${8 / zoom} ${6 / zoom}`} opacity={0.6} />
+        </g>
+      );
+    }
+
+    // 12. BATHTUB
+    if (blockId.includes('bath') || ent.name?.toLowerCase().includes('bath')) {
+      return (
+        <g>
+          {/* Outer Frame */}
+          <rect x={0} y={0} width={bw} height={bh} rx={16 / zoom} fill={fillColor} stroke={strokeColor} strokeWidth={strokeW} />
+          {/* Inner Tub Well */}
+          <rect x={bw * 0.08} y={bh * 0.1} width={bw * 0.84} height={bh * 0.8} rx={bw * 0.15} fill="#0F172A" stroke={strokeColor} strokeWidth={strokeW} />
+          {/* Faucet & Drain Plug */}
+          <circle cx={bw * 0.18} cy={bh / 2} r={22 / zoom} fill={strokeColor} />
+          <circle cx={bw * 0.18} cy={bh / 2} r={8 / zoom} fill="#64748B" />
+        </g>
+      );
+    }
+
+    // 13. WARDROBE / CLOSET
+    if (blockId.includes('wardrobe') || ent.name?.toLowerCase().includes('wardrobe')) {
+      const doorsCount = bw >= 1600 ? 3 : 2;
+      const doorW = bw / doorsCount;
+      return (
+        <g>
+          <rect x={0} y={0} width={bw} height={bh} rx={6 / zoom} fill={fillColor} stroke={strokeColor} strokeWidth={strokeW} />
+          {/* Sliding door panels and handles */}
+          {Array.from({ length: doorsCount }).map((_, i) => (
+            <g key={i}>
+              <line x1={i * doorW} y1={0} x2={i * doorW} y2={bh} stroke={strokeColor} strokeWidth={strokeW} />
+              <rect x={i * doorW + doorW / 2 - 25} y={bh / 2 - 40} width={50} height={80} rx={2} fill="#334155" stroke={detailColor} strokeWidth={thinW} />
+            </g>
+          ))}
+          {/* Hanger rail line */}
+          <line x1={20} y1={bh * 0.3} x2={bw - 20} y2={bh * 0.3} stroke={detailColor} strokeWidth={thinW} strokeDasharray={`${6 / zoom} ${6 / zoom}`} />
+        </g>
+      );
+    }
+
+    // 14. REFRIGERATOR
+    if (blockId.includes('fridge') || ent.name?.toLowerCase().includes('fridge')) {
+      return (
+        <g>
+          <rect x={0} y={0} width={bw} height={bh} rx={8 / zoom} fill={fillColor} stroke={strokeColor} strokeWidth={strokeW} />
+          <line x1={0} y1={bh * 0.35} x2={bw} y2={bh * 0.35} stroke={strokeColor} strokeWidth={strokeW * 1.3} />
+          {/* Door Handles */}
+          <rect x={bw * 0.85} y={bh * 0.08} width={22} height={bh * 0.22} rx={4} fill="#0284C7" />
+          <rect x={bw * 0.85} y={bh * 0.42} width={22} height={bh * 0.45} rx={4} fill="#0284C7" />
+        </g>
+      );
+    }
+
+    // 15. RECESSED LED DOWNLIGHT
+    if (blockId.includes('light') || ent.name?.toLowerCase().includes('light')) {
+      const r = Math.min(bw, bh) / 2;
+      return (
+        <g>
+          <circle cx={bw / 2} cy={bh / 2} r={r} fill={fillColor} stroke={strokeColor} strokeWidth={strokeW} />
+          <circle cx={bw / 2} cy={bh / 2} r={r * 0.55} fill="#FEF08A" stroke="#FACC15" strokeWidth={thinW} />
+          <line x1={bw / 2 - r} y1={bh / 2} x2={bw / 2 + r} y2={bh / 2} stroke={detailColor} strokeWidth={thinW} />
+          <line x1={bw / 2} y1={bh / 2 - r} x2={bw / 2} y2={bh / 2 + r} stroke={detailColor} strokeWidth={thinW} />
+        </g>
+      );
+    }
+
     // Default Fallback Vector Block
     return (
       <g>
