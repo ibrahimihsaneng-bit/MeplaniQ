@@ -16,6 +16,7 @@ export default function AutoCadRibbon({
   onToggleThermalHeatmap,
   onAutoDimensionAll,
   onInsertScheduleTable,
+  onInsertTitleBlock,
   showWallDimensions,
   onToggleWallDimensions,
   settings,
@@ -270,6 +271,28 @@ export default function AutoCadRibbon({
           >
             <span>📑</span>
             <span>Schedule</span>
+          </button>
+
+          {/* Insert Sheet Border & ISO Title Block Button */}
+          <button
+            type="button"
+            onClick={onInsertTitleBlock}
+            title="Fit ISO 5457 A1 Sheet Border & ISO 7200 Title Block with North Arrow (TITLEBLOCK / SHEET)"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #10B981',
+              color: '#34D399',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <span>🔲</span>
+            <span>Title Block</span>
           </button>
 
           {/* Convert Linework to MEPlanIQ Solved Rooms */}

@@ -1141,3 +1141,211 @@ export function generateScheduleTable(entities, detectedRooms = [], origin = { x
 
   return elements;
 }
+
+/**
+ * Generates an ISO 5457 / ISO 7200 Architectural Sheet Border and Title Block
+ * tailored to drawing bounding extents with True North Arrow and drawing metadata.
+ */
+export function generateTitleBlockAndBorder(entities = [], projectName = "BIM RESEARCH PROJECT", sheetSize = "A1") {
+  const elements = [];
+  const timestamp = Date.now();
+
+  // 1. Calculate drawing bounding box
+  let minX = 0, minY = 0, maxX = 8000, maxY = 6000;
+  const xs = [];
+  const ys = [];
+
+  entities.forEach(e => {
+    // Exclude existing title blocks or borders to prevent runaway expansion
+    if (e.isSheetBorder || e.isTitleBlock) return;
+    if (e.centerline) {
+      xs.push(e.centerline.p1.x, e.centerline.p2.x);
+      ys.push(e.centerline.p1.y, e.centerline.p2.y);
+    } else if (e.p1 && e.p2) {
+      xs.push(e.p1.x, e.p2.x);
+      ys.push(e.p1.y, e.p2.y);
+    } else if (e.x !== undefined && e.y !== undefined) {
+      xs.push(e.x);
+      ys.push(e.y);
+    }
+  });
+
+  if (xs.length > 0) {
+    minX = Math.min(...xs);
+    maxX = Math.max(...xs);
+    minY = Math.min(...ys);
+    maxY = Math.max(...ys);
+  }
+
+  const modelW = Math.max(8000, maxX - minX);
+  const modelH = Math.max(6000, maxY - minY);
+
+  // Compute sheet margins (leave room on right for Title Block & Schedule Table)
+  const leftMargin = 1500;
+  const rightMargin = 4500;
+  const topMargin = 1500;
+  const bottomMargin = 2000;
+
+  const sheetX1 = minX - leftMargin;
+  const sheetY1 = minY - bottomMargin;
+  const sheetX2 = maxX + rightMargin;
+  const sheetY2 = maxY + topMargin;
+
+  const innerOffset = 150;
+  const inX1 = sheetX1 + innerOffset;
+  const inY1 = sheetY1 + innerOffset;
+  const inX2 = sheetX2 - innerOffset;
+  const inY2 = sheetY2 - innerOffset;
+
+  // Outer Border
+  elements.push({
+    id: `border-outer-${timestamp}`,
+    type: 'rect',
+    p1: { x: sheetX1, y: sheetY1 },
+    p2: { x: sheetX2, y: sheetY2 },
+    layer: 'A-ANNO',
+    isSheetBorder: true
+  });
+
+  // Inner Border (Drawing Area Boundary)
+  elements.push({
+    id: `border-inner-${timestamp}`,
+    type: 'rect',
+    p1: { x: inX1, y: inY1 },
+    p2: { x: inX2, y: inY2 },
+    layer: 'A-ANNO',
+    isSheetBorder: true
+  });
+
+  // ISO Drawing Title Block in bottom-right corner
+  const tbW = 3800;
+  const tbH = 1400;
+  const tbX = inX2 - tbW;
+  const tbY = inY1;
+
+  elements.push({
+    id: `tb-box-${timestamp}`,
+    type: 'rect',
+    p1: { x: tbX, y: tbY },
+    p2: { x: inX2, y: tbY + tbH },
+    layer: 'A-ANNO',
+    isTitleBlock: true
+  });
+
+  // Horizontal divisions in Title Block
+  const hDivs = [350, 700, 1050];
+  hDivs.forEach((h, idx) => {
+    elements.push({
+      id: `tb-hdiv-${idx}-${timestamp}`,
+      type: 'line',
+      p1: { x: tbX, y: tbY + h },
+      p2: { x: inX2, y: tbY + h },
+      layer: 'A-ANNO',
+      isTitleBlock: true
+    });
+  });
+
+  // Vertical split inside title block
+  elements.push({
+    id: `tb-vdiv-1-${timestamp}`,
+    type: 'line',
+    p1: { x: tbX + 2200, y: tbY },
+    p2: { x: tbX + 2200, y: tbY + 700 },
+    layer: 'A-ANNO',
+    isTitleBlock: true
+  });
+
+  // Title Block Text Labels
+  const now = new Date();
+  const dateFormatted = `${now.toLocaleString('default', { month: 'short' }).toUpperCase()} ${now.getFullYear()}`;
+
+  const tbTexts = [
+    { text: "MEPlanIQ COMPUTATIONAL BIM STUDIO", x: tbX + 120, y: tbY + 1150, size: 140, weight: 'bold' },
+    { text: `PROJECT: ${projectName.toUpperCase()}`, x: tbX + 120, y: tbY + 800, size: 150, weight: 'bold' },
+    { text: "SHEET: GROUND FLOOR PLAN & MEP LAYOUT", x: tbX + 120, y: tbY + 450, size: 130, weight: 'bold' },
+    { text: "STATUS: ISSUED FOR PERMIT / REVIEW", x: tbX + 120, y: tbY + 120, size: 120, weight: 'normal' },
+    { text: "SCALE: 1:100 @ A1", x: tbX + 2300, y: tbY + 450, size: 120, weight: 'bold' },
+    { text: `DATE: ${dateFormatted}`, x: tbX + 2300, y: tbY + 120, size: 120, weight: 'normal' },
+    { text: "DWG NO: A-101", x: inX2 - 600, y: tbY + 120, size: 150, weight: 'bold' }
+  ];
+
+  tbTexts.forEach((t, idx) => {
+    elements.push({
+      id: `tb-txt-${idx}-${timestamp}`,
+      type: 'text',
+      text: t.text,
+      x: t.x,
+      y: t.y,
+      fontSize: t.size,
+      layer: 'A-ANNO',
+      isTitleBlock: true
+    });
+  });
+
+  // True North Arrow at Top-Right
+  const naX = inX2 - 1200;
+  const naY = inY2 - 1200;
+  const naRadius = 350;
+
+  // North Compass Circle
+  elements.push({
+    id: `north-circle-${timestamp}`,
+    type: 'circle',
+    center: { x: naX, y: naY },
+    radius: naRadius,
+    layer: 'A-ANNO',
+    isTitleBlock: true
+  });
+
+  // Vertical arrow centerline
+  elements.push({
+    id: `north-arrow-line-${timestamp}`,
+    type: 'line',
+    p1: { x: naX, y: naY - naRadius },
+    p2: { x: naX, y: naY + naRadius + 150 },
+    layer: 'A-ANNO',
+    isTitleBlock: true
+  });
+
+  // North Arrowhead (triangle)
+  elements.push(
+    {
+      id: `north-arrow-left-${timestamp}`,
+      type: 'line',
+      p1: { x: naX, y: naY + naRadius + 150 },
+      p2: { x: naX - 90, y: naY + naRadius - 80 },
+      layer: 'A-ANNO',
+      isTitleBlock: true
+    },
+    {
+      id: `north-arrow-right-${timestamp}`,
+      type: 'line',
+      p1: { x: naX, y: naY + naRadius + 150 },
+      p2: { x: naX + 90, y: naY + naRadius - 80 },
+      layer: 'A-ANNO',
+      isTitleBlock: true
+    },
+    {
+      id: `north-arrow-base-${timestamp}`,
+      type: 'line',
+      p1: { x: naX - 90, y: naY + naRadius - 80 },
+      p2: { x: naX + 90, y: naY + naRadius - 80 },
+      layer: 'A-ANNO',
+      isTitleBlock: true
+    }
+  );
+
+  // "N" Label
+  elements.push({
+    id: `north-label-${timestamp}`,
+    type: 'text',
+    text: "N",
+    x: naX - 45,
+    y: naY + naRadius + 220,
+    fontSize: 240,
+    layer: 'A-ANNO',
+    isTitleBlock: true
+  });
+
+  return elements;
+}

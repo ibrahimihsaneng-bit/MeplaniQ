@@ -17,7 +17,8 @@ import {
   mirrorEntityGeometry,
   recalculateDoorGeometry,
   generateAutoDimensions,
-  generateScheduleTable
+  generateScheduleTable,
+  generateTitleBlockAndBorder
 } from '../features/autocad/cadGeometryUtils';
 import { fetchProjectById, updateProjectById, createManualProject, solveCadGeometry, exportDxf } from '../api';
 import Toast from '../Toast';
@@ -260,6 +261,15 @@ export default function AutoCadPage() {
       showToast("No schedule items to display", "info");
     }
   }, [entities, detectedRooms, addEntities, appendHistory, showToast]);
+
+  const handleInsertTitleBlock = useCallback(() => {
+    const borderEntities = generateTitleBlockAndBorder(entities, projectName || "BIM RESEARCH PROJECT", "A1");
+    // Filter out previous title blocks/borders if re-running
+    const cleanEntities = entities.filter(e => !e.isSheetBorder && !e.isTitleBlock);
+    setEntities([...cleanEntities, ...borderEntities]);
+    appendHistory(`SHEET: Fitted ISO 5457 A1 Sheet Border & ISO 7200 Title Block with North Arrow (${borderEntities.length} entities).`);
+    showToast("ISO A1 Sheet Border & Title Block stamped!", "success");
+  }, [entities, projectName, setEntities, appendHistory, showToast]);
 
   const handleFlipDoorSwing = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -530,6 +540,13 @@ export default function AutoCadPage() {
         handleInsertScheduleTable();
         break;
 
+      case 'TITLEBLOCK':
+      case 'BORDER':
+      case 'SHEET':
+      case 'FRAME':
+        handleInsertTitleBlock();
+        break;
+
       case 'U':
       case 'UNDO':
         if (undo()) appendHistory("UNDO");
@@ -558,7 +575,7 @@ export default function AutoCadPage() {
         appendHistory(`Unknown command "${cleanCmd}". Type WALL, DOOR, WINDOW, FILLET, LINE, REC, DIM, or BLK.`, 'error');
         break;
     }
-  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, appendHistory]);
+  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, handleInsertTitleBlock, appendHistory]);
 
   // Coordinate Input Handler
   const handleCoordinateSubmit = useCallback((coordStr) => {
@@ -765,6 +782,7 @@ export default function AutoCadPage() {
         onToggleThermalHeatmap={() => setShowThermalHeatmap(prev => !prev)}
         onAutoDimensionAll={handleAutoDimensionAll}
         onInsertScheduleTable={handleInsertScheduleTable}
+        onInsertTitleBlock={handleInsertTitleBlock}
         settings={settings}
         onUpdateSetting={updateSetting}
         canUndo={canUndo}
