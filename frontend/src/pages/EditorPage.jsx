@@ -43,6 +43,12 @@ import {
 import QualityTierSelectorModal from '../features/boq/QualityTierSelectorModal';
 import BoqDashboardModal from '../features/boq/BoqDashboardModal';
 import ValidationDrawer from '../components/ValidationDrawer';
+import { generateProjectCoordinatedMep, convertSolveDataToCadEntities } from '../features/mep/projectMepEngine';
+import AutoMepModal from '../features/mep/AutoMepModal';
+import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
+import AutoCadEngineeringPanel from '../features/autocad/AutoCadEngineeringPanel';
+import AutoCad3DViewport from '../features/autocad/AutoCad3DViewport';
+import { generateMasterSubmissionAudit } from '../features/autocad/cadGeometryUtils';
 import '../styles.css';
 
 const DEFAULT_TRANSFORM = { x: 0, y: 0, width: 0.1, height: 0.1 };
@@ -74,6 +80,13 @@ export default function EditorPage() {
   const [activeTool, setActiveTool] = useState('select'); // 'select' | 'wall' | 'door' | 'window' | 'hvac' | 'plumbing' | 'furniture' | 'electrical'
   const [selectedElement, setSelectedElement] = useState(null);
   const [isValidationDrawerOpen, setIsValidationDrawerOpen] = useState(false);
+
+  // Coordinated Auto-MEP & BIM Studio States
+  const [isAutoMepModalOpen, setIsAutoMepModalOpen] = useState(false);
+  const [isClashDrawerOpen, setIsClashDrawerOpen] = useState(false);
+  const [clashData, setClashData] = useState(null);
+  const [isEngineeringPanelOpen, setIsEngineeringPanelOpen] = useState(false);
+  const [is3DViewActive, setIs3DViewActive] = useState(false);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
   const [isInspectorExpanded, setIsInspectorExpanded] = useState(false);
 
@@ -537,6 +550,101 @@ export default function EditorPage() {
   const [isPopulatingMep, setIsPopulatingMep] = useState(false);
   const [currentVariant, setCurrentVariant] = useState(0);
   const [isSwitchingVariant, setIsSwitchingVariant] = useState(false);
+
+  // Convert solveData to CAD entities for 3D Viewport, Clash Detection, and Analytics Panel
+  const cadEntities = useMemo(() => convertSolveDataToCadEntities(solveData), [solveData]);
+  const detectedRoomsMemo = useMemo(() => (solveData?.rooms || []).map(r => ({
+    name: r.name,
+    carpet_area_sqm: r.carpet_area_sqm || 15,
+    perimeter_m: 16
+  })), [solveData]);
+
+  const handleApplyCoordinatedMep = useCallback((options = {}) => {
+    if (!solveData || !solveData.rooms || solveData.rooms.length === 0) {
+      showToast("No rooms found to coordinate MEP. Please draw or load a floorplan first.", "warning");
+      return;
+    }
+
+    try {
+      showToast("⚙️ Computing ASHRAE CFM airflow, duct sizing & coordinated MEP...", "info");
+      const res = generateProjectCoordinatedMep(solveData, options);
+
+      if (!res || !res.success) {
+        showToast(res?.error || "Failed to generate coordinated MEP.", "error");
+        return;
+      }
+
+      setSolveData(prev => ({
+        ...prev,
+        hvac_ducts: res.hvac_ducts,
+        hvac_diffusers: res.hvac_diffusers,
+        hvac_return_grilles: res.hvac_return_grilles,
+        hvac_equipment: [
+          ...(prev?.hvac_equipment || []).filter(e => e.unit_type !== 'Central-AHU' && e.type !== 'AHU'),
+          ...res.hvac_equipment
+        ],
+        structural_columns: res.structural_columns,
+        structural_grid: res.structural_grid,
+        clash_markers: res.clash_markers
+      }));
+
+      if (res.electrical_components && res.electrical_components.length > 0) {
+        setEditableElectricalComponents(res.electrical_components);
+      }
+      if (res.electrical_routes && res.electrical_routes.length > 0) {
+        setEditableElectricalRoutes(res.electrical_routes);
+      }
+      if (res.plumbing_fixtures && res.plumbing_fixtures.length > 0) {
+        setEditablePlumbingFixtures(res.plumbing_fixtures);
+      }
+      if (res.plumbing_pipes && res.plumbing_pipes.length > 0) {
+        setEditablePlumbingPipes(res.plumbing_pipes);
+      }
+
+      const cData = {
+        clashes: res.clash_markers || [],
+        summary: {
+          total: res.clash_markers.length,
+          hard: res.clash_markers.filter(c => c.severity === 'HARD').length,
+          clearance: res.clash_markers.filter(c => c.severity === 'CLEARANCE').length,
+          status: res.clash_markers.length === 0 ? 'COORDINATED' : 'INTERFERENCE_FLAGGED'
+        }
+      };
+      setClashData(cData);
+
+      setIsDirty(true);
+      showToast(`Coordinated MEP Applied: ${res.summary.totalCfm} CFM Total Airflow (${res.summary.diffuserCount} Diffusers, ${res.summary.columnCount} Columns)`, "success");
+
+      if (options.includeClashDetection && res.clash_markers.length > 0) {
+        setIsClashDrawerOpen(true);
+      }
+    } catch (err) {
+      console.error("Auto MEP Generation Error:", err);
+      showToast("Error generating coordinated MEP: " + err.message, "error");
+    }
+  }, [solveData, showToast]);
+
+  const handleGenerateMasterSubmissionAudit = useCallback(() => {
+    if (!solveData) return;
+    const entities = convertSolveDataToCadEntities(solveData);
+    const detectedRooms = (solveData.rooms || []).map(r => ({
+      name: r.name,
+      carpet_area_sqm: r.carpet_area_sqm || 15,
+      perimeter_m: 16
+    }));
+    const audit = generateMasterSubmissionAudit(entities, detectedRooms, solveData.project_name || "MeplanIQ Engineering Project");
+    const jsonStr = JSON.stringify(audit, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(solveData.project_name || 'MeplanIQ_BIM').replace(/\s+/g, '_')}_Master_Audit_Dossier.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Master Engineering Certification Dossier exported (.JSON)!", "success");
+  }, [solveData, showToast]);
 
   const handleAutoPopulateMep = async (options = {}) => {
     const currentProjectId = solveData?.project_id || id;
@@ -1837,7 +1945,7 @@ export default function EditorPage() {
     <div className="cad-workbench-layout">
       {/* 1. TOP NAVBAR */}
       <nav className="cad-top-navbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexShrink: 1 }}>
           <button
             onClick={() => navigate('/projects')}
             className="btn-secondary"
@@ -1852,7 +1960,9 @@ export default function EditorPage() {
               color: 'var(--text-secondary)',
               fontWeight: 600,
               cursor: 'pointer',
-              borderRadius: '6px'
+              borderRadius: '6px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
             }}
             title="Return to Projects Dashboard"
           >
@@ -1862,12 +1972,23 @@ export default function EditorPage() {
           <img 
             src="/logo-meplaniq-symbol.svg" 
             alt="meplaniq" 
-            style={{ height: "36px", width: "36px", display: "block", borderRadius: "6px" }} 
+            style={{ height: "32px", width: "32px", display: "block", borderRadius: "6px", flexShrink: 0 }} 
           />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Projects /</span>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>Projects /</span>
+            <span 
+              title={solveData?.project_name || "Parametric Floorplan"}
+              style={{
+                fontSize: '14px',
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '220px'
+              }}
+            >
               {solveData?.project_name || "Parametric Floorplan"}
             </span>
           </div>
@@ -2071,13 +2192,10 @@ export default function EditorPage() {
             <span>{isSwitchingVariant ? '🔄...' : `🔄 Model ${currentVariant + 1}`}</span>
           </button>
 
-          {/* ⚡ Room MEP Automation Hub Trigger */}
+          {/* ⚡ Coordinated Auto-MEP Engine Trigger */}
           <button
-            onClick={() => {
-              setActiveTab('automation');
-              setIsScheduleCollapsed(false);
-            }}
-            disabled={isPopulatingMep || !solveData}
+            onClick={() => setIsAutoMepModalOpen(true)}
+            disabled={!solveData}
             style={{
               background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
               border: '1px solid #34D399',
@@ -2086,7 +2204,7 @@ export default function EditorPage() {
               fontSize: '11px',
               fontWeight: 700,
               borderRadius: '6px',
-              cursor: (isPopulatingMep || !solveData) ? 'not-allowed' : 'pointer',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
@@ -2094,9 +2212,117 @@ export default function EditorPage() {
               whiteSpace: 'nowrap',
               flexShrink: 0
             }}
-            title="Open Automation Hub (Plumbing, Electrical, HVAC, Furniture)"
+            title="Open Coordinated Auto-MEP Engine (ASHRAE CFM Sized Ducts, Electrical DB-01, Plumbing & Structure)"
           >
-            <span>⚡ Automation</span>
+            <span>⚡ Auto MEP</span>
+          </button>
+
+          {/* 🧊 3D Spatial BIM Extrusion Viewport */}
+          <button
+            onClick={() => setIs3DViewActive(true)}
+            disabled={!solveData}
+            style={{
+              background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+              border: '1px solid #38BDF8',
+              color: '#FFFFFF',
+              padding: '5px 9px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(2, 132, 199, 0.35)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Inspect 3D Axonometric BIM Model with Extruded Walls, Elevated Ducts & Columns"
+          >
+            <span>🧊 3D View</span>
+          </button>
+
+          {/* ⚠️ Multi-Discipline BIM Clash Matrix */}
+          <button
+            onClick={() => {
+              if (!clashData) {
+                handleApplyCoordinatedMep({ includeClashDetection: true });
+              } else {
+                setIsClashDrawerOpen(prev => !prev);
+              }
+            }}
+            disabled={!solveData}
+            style={{
+              backgroundColor: '#1E293B',
+              border: '1px solid #EF4444',
+              color: '#FCA5A5',
+              padding: '5px 9px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="View Multi-Discipline BIM Clash Detection Matrix"
+          >
+            <span>⚠️ Clash Matrix</span>
+            {clashData?.summary?.total > 0 && (
+              <span style={{ backgroundColor: '#EF4444', color: '#FFF', fontSize: '9px', padding: '1px 4px', borderRadius: '4px' }}>
+                {clashData.summary.total}
+              </span>
+            )}
+          </button>
+
+          {/* 📊 Computational Engineering Analytics Dashboard */}
+          <button
+            onClick={() => setIsEngineeringPanelOpen(prev => !prev)}
+            disabled={!solveData}
+            style={{
+              backgroundColor: '#1E293B',
+              border: '1px solid #06B6D4',
+              color: '#67E8F9',
+              padding: '5px 9px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="View NBC 2016 WFR, ASHRAE Cooling Loads, CIBSE Lux & Civil BOQ Dashboard"
+          >
+            <span>📊 Analytics</span>
+          </button>
+
+          {/* 🎓 Master Dissertation Audit Dossier */}
+          <button
+            onClick={handleGenerateMasterSubmissionAudit}
+            disabled={!solveData}
+            style={{
+              backgroundColor: '#1E293B',
+              border: '1px solid #A855F7',
+              color: '#D8B4FE',
+              padding: '5px 9px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Export PhD Dissertation Grade Master Engineering Audit Dossier (.JSON)"
+          >
+            <span>🎓 Master Audit</span>
           </button>
 
           <div style={{ width: '1px', height: '18px', backgroundColor: 'var(--border-subtle)', margin: '0 2px', flexShrink: 0 }} />
@@ -2648,6 +2874,43 @@ export default function EditorPage() {
           setIsTierSelectorOpen(true);
         }}
       />
+
+      {/* Auto-MEP Configuration Modal */}
+      <AutoMepModal
+        isOpen={isAutoMepModalOpen}
+        onClose={() => setIsAutoMepModalOpen(false)}
+        onApply={handleApplyCoordinatedMep}
+        projectName={solveData?.project_name}
+      />
+
+      {/* Multi-Discipline BIM Clash Matrix Drawer */}
+      {isClashDrawerOpen && clashData && (
+        <AutoCadClashDrawer
+          clashData={clashData}
+          onClose={() => setIsClashDrawerOpen(false)}
+          onDownloadAuditReport={handleGenerateMasterSubmissionAudit}
+          onHighlightClash={(pt) => showToast(`Inspecting clash at (${Math.round(pt.x)}, ${Math.round(pt.y)})`, "info")}
+        />
+      )}
+
+      {/* Computational Engineering Analytics Dashboard */}
+      {isEngineeringPanelOpen && (
+        <AutoCadEngineeringPanel
+          entities={cadEntities}
+          detectedRooms={detectedRoomsMemo}
+          onClose={() => setIsEngineeringPanelOpen(false)}
+        />
+      )}
+
+      {/* 3D Spatial BIM Extrusion Viewport */}
+      {is3DViewActive && (
+        <AutoCad3DViewport
+          entities={cadEntities}
+          detectedRooms={detectedRoomsMemo}
+          onClose={() => setIs3DViewActive(false)}
+        />
+      )}
+
       <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );

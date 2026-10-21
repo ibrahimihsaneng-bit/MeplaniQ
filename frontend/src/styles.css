@@ -737,10 +737,14 @@ html, body {
   justify-content: space-between;
   padding: 0 16px;
   height: 52px;
+  min-height: 52px;
+  max-height: 52px;
   background-color: var(--bg-panel);
   border-bottom: 1px solid var(--border-subtle);
   z-index: 50;
   flex-shrink: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .cad-workspace-body {

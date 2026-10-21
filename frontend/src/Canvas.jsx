@@ -1479,6 +1479,74 @@ export default function Canvas({
             }
           </g>
 
+          {/* LAYER_STRUCTURE (Structural Grid & Reinforced Concrete Columns) */}
+          {((solveData?.structural_grid && solveData.structural_grid.length > 0) ||
+            (solveData?.structural_columns && solveData.structural_columns.length > 0)) && (
+            <g id="LAYER_STRUCTURE" style={{ pointerEvents: 'none' }}>
+              {/* Structural Grid Centerlines */}
+              {(solveData?.structural_grid || []).map((grid, gIdx) => {
+                const p1 = grid.p1 || [0, 0];
+                const p2 = grid.p2 || [0, 0];
+                const r = 220;
+                return (
+                  <g key={`struct-grid-${grid.id || gIdx}`} className="cad-grid-line">
+                    <line
+                      x1={p1[0]}
+                      y1={p1[1]}
+                      x2={p2[0]}
+                      y2={p2[1]}
+                      stroke="#0284C7"
+                      strokeWidth={1.5 / zoom}
+                      strokeDasharray={`${120 / zoom} ${40 / zoom} ${30 / zoom} ${40 / zoom}`}
+                      opacity={0.65}
+                    />
+                    {/* Top / End Bubble */}
+                    <circle cx={p2[0]} cy={p2[1]} r={r} fill="#0F172A" stroke="#0284C7" strokeWidth={1.8 / zoom} />
+                    <g transform={`translate(${p2[0]}, ${p2[1]}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <text textAnchor="middle" dominantBaseline="middle" fill="#38BDF8" fontSize="13" fontWeight="bold">
+                        {grid.name}
+                      </text>
+                    </g>
+                    {/* Bottom / Start Bubble */}
+                    <circle cx={p1[0]} cy={p1[1]} r={r} fill="#0F172A" stroke="#0284C7" strokeWidth={1.8 / zoom} />
+                    <g transform={`translate(${p1[0]}, ${p1[1]}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <text textAnchor="middle" dominantBaseline="middle" fill="#38BDF8" fontSize="13" fontWeight="bold">
+                        {grid.name}
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
+
+              {/* Structural Columns */}
+              {(solveData?.structural_columns || []).map((col, cIdx) => {
+                const s = col.size || 300;
+                const hs = s / 2;
+                return (
+                  <g key={`struct-col-${col.id || cIdx}`} className="cad-column">
+                    <rect
+                      x={col.x - hs}
+                      y={col.y - hs}
+                      width={s}
+                      height={s}
+                      fill="rgba(6, 182, 212, 0.28)"
+                      stroke="#06B6D4"
+                      strokeWidth={2 / zoom}
+                    />
+                    <line x1={col.x - hs} y1={col.y - hs} x2={col.x + hs} y2={col.y + hs} stroke="#06B6D4" strokeWidth={1 / zoom} />
+                    <line x1={col.x - hs} y1={col.y + hs} x2={col.x + hs} y2={col.y - hs} stroke="#06B6D4" strokeWidth={1 / zoom} />
+                    <g transform={`translate(${col.x}, ${col.y + hs + 80}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect x="-18" y="-9" width="36" height="18" rx="3" fill="#0F172A" stroke="#06B6D4" strokeWidth="0.8" />
+                      <text x="0" y="3" textAnchor="middle" dominantBaseline="middle" fill="#67E8F9" fontSize="9" fontWeight="700">
+                        {col.name || `C${cIdx + 1}`}
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
+            </g>
+          )}
+
           {/* LAYER_FURNITURE */}
           {showFurniture && (() => {
             const activeFurniture = (furniture && Array.isArray(furniture) && furniture.length > 0)
@@ -2794,6 +2862,150 @@ export default function Canvas({
                   </g>
                 );
               })}
+
+              {/* Central Ducted HVAC Air Handling Unit (AHU) */}
+              {(solveData?.hvac_equipment || []).filter(eq => eq.unit_type === 'Central-AHU' || eq.type === 'AHU').map((ahu, aIdx) => {
+                const w = ahu.width || 600;
+                const h = ahu.height || 900;
+                return (
+                  <g key={`ahu-${ahu.id || aIdx}`} className="cad-ahu-unit">
+                    <rect
+                      x={ahu.x - w / 2}
+                      y={ahu.y - h / 2}
+                      width={w}
+                      height={h}
+                      rx={8 / zoom}
+                      fill="rgba(249, 115, 22, 0.22)"
+                      stroke="#F97316"
+                      strokeWidth={2.5 / zoom}
+                    />
+                    <circle cx={ahu.x} cy={ahu.y} r={Math.min(w, h) * 0.35} fill="none" stroke="#F97316" strokeWidth={1.5 / zoom} strokeDasharray={`${8 / zoom} ${4 / zoom}`} />
+                    <line x1={ahu.x - w / 2} y1={ahu.y} x2={ahu.x + w / 2} y2={ahu.y} stroke="#F97316" strokeWidth={1.2 / zoom} />
+                    <g transform={`translate(${ahu.x}, ${ahu.y - h / 2 - 120}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect x="-90" y="-12" width="180" height="24" rx="4" fill="#0F172A" stroke="#F97316" strokeWidth="1.2" />
+                      <text x="0" y="4" textAnchor="middle" dominantBaseline="middle" fill="#FED7AA" fontSize="10" fontWeight="800">
+                        💨 {ahu.name || 'AHU-01'}
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
+
+              {/* Central Ducted HVAC Duct Segments (Supply / Return / Branch) */}
+              {(solveData?.hvac_ducts || []).map((duct, dIdx) => {
+                const p1 = duct.p1 || [0, 0];
+                const p2 = duct.p2 || [0, 0];
+                const dx = p2[0] - p1[0];
+                const dy = p2[1] - p1[1];
+                const len = Math.hypot(dx, dy);
+                if (len < 1) return null;
+                const nx = -dy / len;
+                const ny = dx / len;
+                const halfW = (duct.width || 300) / 2;
+                const c1 = [p1[0] + nx * halfW, p1[1] + ny * halfW];
+                const c2 = [p2[0] + nx * halfW, p2[1] + ny * halfW];
+                const c3 = [p2[0] - nx * halfW, p2[1] - ny * halfW];
+                const c4 = [p1[0] - nx * halfW, p1[1] - ny * halfW];
+                const polyPoints = `${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${c3[0]},${c3[1]} ${c4[0]},${c4[1]}`;
+                const midX = (p1[0] + p2[0]) / 2;
+                const midY = (p1[1] + p2[1]) / 2;
+                const isTrunk = duct.system === 'SUPPLY';
+                const ductColor = isTrunk ? '#F97316' : '#FB923C';
+
+                return (
+                  <g key={`duct-${duct.id || dIdx}`} className="cad-hvac-duct">
+                    <polygon
+                      points={polyPoints}
+                      fill={isTrunk ? "rgba(249, 115, 22, 0.16)" : "rgba(251, 146, 60, 0.12)"}
+                      stroke={ductColor}
+                      strokeWidth={2 / zoom}
+                      strokeLinejoin="miter"
+                    />
+                    <line
+                      x1={p1[0]}
+                      y1={p1[1]}
+                      x2={p2[0]}
+                      y2={p2[1]}
+                      stroke={ductColor}
+                      strokeWidth={1.2 / zoom}
+                      strokeDasharray={`${80 / zoom} ${40 / zoom}`}
+                    />
+                    {len > 600 && (
+                      <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                        <rect x="-65" y="-9" width="130" height="18" rx="3" fill="#0F172A" stroke={ductColor} strokeWidth="1" />
+                        <text x="0" y="3" textAnchor="middle" dominantBaseline="middle" fill="#FED7AA" fontSize="9" fontWeight="700">
+                          {duct.label || `${duct.width}x${duct.height}`}
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* 4-Way Ceiling Diffusers */}
+              {(solveData?.hvac_diffusers || []).map((diff, dfIdx) => {
+                const s = diff.size || 450;
+                const hs = s / 2;
+                return (
+                  <g key={`diff-${diff.id || dfIdx}`} className="cad-diffuser">
+                    <rect
+                      x={diff.x - hs}
+                      y={diff.y - hs}
+                      width={s}
+                      height={s}
+                      fill="rgba(14, 165, 233, 0.25)"
+                      stroke="#0EA5E9"
+                      strokeWidth={2 / zoom}
+                    />
+                    <rect
+                      x={diff.x - hs * 0.5}
+                      y={diff.y - hs * 0.5}
+                      width={s * 0.5}
+                      height={s * 0.5}
+                      fill="none"
+                      stroke="#38BDF8"
+                      strokeWidth={1.5 / zoom}
+                    />
+                    <line x1={diff.x - hs} y1={diff.y - hs} x2={diff.x - hs * 0.5} y2={diff.y - hs * 0.5} stroke="#38BDF8" strokeWidth={1.2 / zoom} />
+                    <line x1={diff.x + hs} y1={diff.y - hs} x2={diff.x + hs * 0.5} y2={diff.y - hs * 0.5} stroke="#38BDF8" strokeWidth={1.2 / zoom} />
+                    <line x1={diff.x - hs} y1={diff.y + hs} x2={diff.x - hs * 0.5} y2={diff.y + hs * 0.5} stroke="#38BDF8" strokeWidth={1.2 / zoom} />
+                    <line x1={diff.x + hs} y1={diff.y + hs} x2={diff.x + hs * 0.5} y2={diff.y + hs * 0.5} stroke="#38BDF8" strokeWidth={1.2 / zoom} />
+                    <g transform={`translate(${diff.x}, ${diff.y - hs - 70}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect x="-55" y="-8" width="110" height="16" rx="3" fill="#0F172A" stroke="#0EA5E9" strokeWidth="1" />
+                      <text x="0" y="3" textAnchor="middle" dominantBaseline="middle" fill="#BAE6FD" fontSize="8.5" fontWeight="700">
+                        💨 {diff.cfm || 150} CFM
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
+
+              {/* Central Return Air Grille (RAG) */}
+              {(solveData?.hvac_return_grilles || []).map((rag, rIdx) => {
+                const s = rag.size || 500;
+                const hs = s / 2;
+                return (
+                  <g key={`rag-${rag.id || rIdx}`} className="cad-return-grille">
+                    <rect
+                      x={rag.x - hs}
+                      y={rag.y - hs}
+                      width={s}
+                      height={s}
+                      fill="rgba(168, 85, 247, 0.25)"
+                      stroke="#A855F7"
+                      strokeWidth={2 / zoom}
+                    />
+                    <line x1={rag.x - hs + 40} y1={rag.y - hs + 40} x2={rag.x + hs - 40} y2={rag.y + hs - 40} stroke="#A855F7" strokeWidth={1.5 / zoom} />
+                    <line x1={rag.x - hs + 40} y1={rag.y + hs - 40} x2={rag.x + hs - 40} y2={rag.y - hs + 40} stroke="#A855F7" strokeWidth={1.5 / zoom} />
+                    <g transform={`translate(${rag.x}, ${rag.y - hs - 70}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect x="-60" y="-8" width="120" height="16" rx="3" fill="#0F172A" stroke="#A855F7" strokeWidth="1" />
+                      <text x="0" y="3" textAnchor="middle" dominantBaseline="middle" fill="#E9D5FF" fontSize="8.5" fontWeight="700">
+                        🔄 RAG ({rag.cfm || 600} CFM)
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
             </g>
           )}
 
@@ -3079,6 +3291,31 @@ export default function Canvas({
               );
             })}
           </g>
+
+          {/* LAYER_CLASH_MARKERS (Multi-Discipline BIM Spatial Clashes) */}
+          {solveData?.clash_markers && solveData.clash_markers.length > 0 && (
+            <g id="LAYER_CLASH_MARKERS" style={{ pointerEvents: 'none' }}>
+              {solveData.clash_markers.map((clash, cIdx) => {
+                const cx = clash.center?.x ?? clash.x ?? 0;
+                const cy = clash.center?.y ?? clash.y ?? 0;
+                const isHard = clash.severity === 'HARD';
+                const color = isHard ? '#EF4444' : '#F59E0B';
+                const r = 240;
+                return (
+                  <g key={`clash-${clash.id || cIdx}`} className="cad-clash-indicator">
+                    <circle cx={cx} cy={cy} r={r} fill={isHard ? "rgba(239, 68, 68, 0.25)" : "rgba(245, 158, 11, 0.25)"} stroke={color} strokeWidth={2 / zoom} strokeDasharray={`${120 / zoom} ${60 / zoom}`} />
+                    <circle cx={cx} cy={cy} r={r * 0.4} fill={color} />
+                    <g transform={`translate(${cx}, ${cy - r - 80}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect x="-40" y="-10" width="80" height="20" rx="4" fill="#0A0E17" stroke={color} strokeWidth="1" />
+                      <text x="0" y="4" textAnchor="middle" dominantBaseline="middle" fill="#FFFFFF" fontSize="9" fontWeight="800">
+                        ⚠️ {clash.severity}
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
+            </g>
+          )}
 
           {/* INTERACTIVE ROOM CORNER & WALL RESIZE HANDLES (Visible only when isResizeModeActive is true and architecture is interactive) */}
           {isResizeModeActive && archVisualState.interactive && (
