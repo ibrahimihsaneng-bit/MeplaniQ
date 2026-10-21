@@ -44,6 +44,7 @@ export default function AutoCadCanvas({
   activeBlockToPlace = null,
   onClearActiveBlock,
   showWallDimensions = true,
+  showThermalHeatmap = false,
   containerRef
 }) {
   const svgRef = useRef(null);
@@ -912,14 +913,25 @@ export default function AutoCadCanvas({
             const cx = Math.round(room.points.reduce((acc, p) => acc + p[0], 0) / room.points.length);
             const cy = Math.round(room.points.reduce((acc, p) => acc + p[1], 0) / room.points.length);
 
+            // Thermal Comfort Heatmap Calculation
+            const area = room.carpet_area_sqm || 15;
+            const rName = (room.name || `Room ${idx + 1}`).toLowerCase();
+            const estWattsPerSqm = (rName.includes('kitch') || rName.includes('liv')) ? 68 : (rName.includes('bed') ? 38 : 48);
+            const heatFill = showThermalHeatmap 
+              ? (estWattsPerSqm > 60 ? "rgba(239, 68, 68, 0.28)" : (estWattsPerSqm > 45 ? "rgba(245, 158, 11, 0.24)" : "rgba(16, 185, 129, 0.22)"))
+              : "url(#cad-hatch-ansi31)";
+            const heatStroke = showThermalHeatmap
+              ? (estWattsPerSqm > 60 ? "#EF4444" : (estWattsPerSqm > 45 ? "#F59E0B" : "#10B981"))
+              : "rgba(56, 189, 248, 0.35)";
+
             return (
               <g key={`detected-room-${idx}`} className="cad-detected-room">
                 <polygon
                   points={ptsStr}
-                  fill="url(#cad-hatch-ansi31)"
-                  stroke="rgba(56, 189, 248, 0.35)"
-                  strokeWidth={1.2 / zoom}
-                  strokeDasharray={`${8 / zoom} ${6 / zoom}`}
+                  fill={heatFill}
+                  stroke={heatStroke}
+                  strokeWidth={1.4 / zoom}
+                  strokeDasharray={showThermalHeatmap ? undefined : `${8 / zoom} ${6 / zoom}`}
                 />
                 <g
                   transform={`translate(${cx}, ${cy}) scale(${1 / zoom}, ${-1 / zoom})`}
@@ -940,14 +952,14 @@ export default function AutoCadCanvas({
                   }}
                 >
                   <rect
-                    x="-55"
+                    x="-60"
                     y="-16"
-                    width="110"
+                    width="120"
                     height="32"
                     rx="6"
                     fill="#0F172A"
                     fillOpacity="0.88"
-                    stroke="#38BDF8"
+                    stroke={showThermalHeatmap ? heatStroke : "#38BDF8"}
                     strokeWidth="1.2"
                   />
                   <text
@@ -965,12 +977,12 @@ export default function AutoCadCanvas({
                     x="0"
                     y="11"
                     textAnchor="middle"
-                    fill="#38BDF8"
-                    fontSize="9.5"
+                    fill={showThermalHeatmap ? (estWattsPerSqm > 60 ? "#FCA5A5" : (estWattsPerSqm > 45 ? "#FDE68A" : "#A7F3D0")) : "#38BDF8"}
+                    fontSize="9"
                     fontWeight="700"
                     fontFamily="monospace"
                   >
-                    {room.carpet_area_sqm} m²
+                    {showThermalHeatmap ? `${room.carpet_area_sqm} m² • ${estWattsPerSqm} W/m²` : `${room.carpet_area_sqm} m²`}
                   </text>
                 </g>
               </g>
@@ -1393,6 +1405,43 @@ export default function AutoCadCanvas({
           </div>
         );
       })()}
+
+      {/* Floating Thermal Comfort Legend */}
+      {showThermalHeatmap && (
+        <div style={{
+          position: 'absolute',
+          bottom: 16,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(15, 23, 42, 0.94)',
+          border: '1px solid #334155',
+          borderRadius: '24px',
+          padding: '6px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px',
+          fontSize: '11px',
+          color: '#F8FAFC',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+          zIndex: 35
+        }}>
+          <span style={{ fontWeight: 800, color: '#38BDF8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span>🌡️</span> ASHRAE Thermal Load Map:
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#10B981', display: 'inline-block' }} />
+            Low (&lt;40 W/m²)
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#F59E0B', display: 'inline-block' }} />
+            Moderate (40–60 W/m²)
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#EF4444', display: 'inline-block' }} />
+            High (&gt;60 W/m²)
+          </span>
+        </div>
+      )}
     </div>
   );
 }

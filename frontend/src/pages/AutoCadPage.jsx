@@ -15,7 +15,8 @@ import {
   dist,
   rotateEntityGeometry,
   mirrorEntityGeometry,
-  recalculateDoorGeometry
+  recalculateDoorGeometry,
+  generateAutoDimensions
 } from '../features/autocad/cadGeometryUtils';
 import { fetchProjectById, updateProjectById, createManualProject, solveCadGeometry, exportDxf } from '../api';
 import Toast from '../Toast';
@@ -70,6 +71,7 @@ export default function AutoCadPage() {
   const [isPropertiesOpen, setIsPropertiesOpen] = useState(true);
   const [isEngineeringPanelOpen, setIsEngineeringPanelOpen] = useState(false);
   const [showWallDimensions, setShowWallDimensions] = useState(true);
+  const [showThermalHeatmap, setShowThermalHeatmap] = useState(false);
   const [activeBlockToPlace, setActiveBlockToPlace] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [isConverting, setIsConverting] = useState(false);
@@ -211,6 +213,17 @@ export default function AutoCadPage() {
       appendHistory(`COPY: Duplicated ${newCopies.length} object(s).`);
     }
   }, [selectedIds, entities, addEntities, appendHistory]);
+
+  const handleAutoDimensionAll = useCallback(() => {
+    const newDims = generateAutoDimensions(entities);
+    if (newDims.length > 0) {
+      addEntities(newDims);
+      appendHistory(`AUTODIM: Generated ${newDims.length} perimeter dimension strings.`);
+      showToast(`Generated ${newDims.length} architectural dimension strings`, "success");
+    } else {
+      showToast("No walls found to dimension", "info");
+    }
+  }, [entities, addEntities, appendHistory, showToast]);
 
   const handleFlipDoorSwing = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -458,6 +471,18 @@ export default function AutoCadPage() {
         appendHistory(`Wall Dimensions: ${!showWallDimensions ? 'ON' : 'OFF'}`);
         break;
 
+      case 'HEATMAP':
+      case 'HVACMAP':
+      case 'THERMAL':
+        setShowThermalHeatmap(prev => !prev);
+        appendHistory(`ASHRAE Thermal Comfort Heatmap: ${!showThermalHeatmap ? 'ON' : 'OFF'}`);
+        break;
+
+      case 'AUTODIM':
+      case 'DIMALL':
+        handleAutoDimensionAll();
+        break;
+
       case 'U':
       case 'UNDO':
         if (undo()) appendHistory("UNDO");
@@ -689,6 +714,9 @@ export default function AutoCadPage() {
         isEngineeringPanelOpen={isEngineeringPanelOpen}
         showWallDimensions={showWallDimensions}
         onToggleWallDimensions={() => setShowWallDimensions(prev => !prev)}
+        showThermalHeatmap={showThermalHeatmap}
+        onToggleThermalHeatmap={() => setShowThermalHeatmap(prev => !prev)}
+        onAutoDimensionAll={handleAutoDimensionAll}
         settings={settings}
         onUpdateSetting={updateSetting}
         canUndo={canUndo}
@@ -724,6 +752,7 @@ export default function AutoCadPage() {
           activeBlockToPlace={activeBlockToPlace}
           onClearActiveBlock={() => setActiveBlockToPlace(null)}
           showWallDimensions={showWallDimensions}
+          showThermalHeatmap={showThermalHeatmap}
           containerRef={containerRef}
         />
 

@@ -12,6 +12,9 @@ export default function AutoCadRibbon({
   isPropertiesOpen,
   onToggleEngineeringPanel,
   isEngineeringPanelOpen,
+  showThermalHeatmap = false,
+  onToggleThermalHeatmap,
+  onAutoDimensionAll,
   showWallDimensions,
   onToggleWallDimensions,
   settings,
@@ -221,6 +224,28 @@ export default function AutoCadRibbon({
           >
             <span>🔬</span>
             <span>BIM Analytics</span>
+          </button>
+
+          {/* Thermal / HVAC Heatmap View Toggle */}
+          <button
+            type="button"
+            onClick={onToggleThermalHeatmap}
+            title="Toggle ASHRAE Spatial Thermal Comfort Heatmap View"
+            style={{
+              background: showThermalHeatmap ? '#B45309' : '#1E293B',
+              border: `1px solid ${showThermalHeatmap ? '#F59E0B' : '#334155'}`,
+              color: showThermalHeatmap ? '#FFFFFF' : '#FDE68A',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <span>🌡️</span>
+            <span>Heatmap</span>
           </button>
 
           {/* Convert Linework to MEPlanIQ Solved Rooms */}
@@ -504,6 +529,27 @@ export default function AutoCadRibbon({
             >
               <span>📐</span>
               <span>Wall Dims</span>
+            </button>
+            <button
+              type="button"
+              onClick={onAutoDimensionAll}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 8px',
+                background: '#1E293B',
+                border: '1px solid #38BDF8',
+                color: '#38BDF8',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: 600
+              }}
+              title="Automatically Generate Perimeter Dimension Strings (AUTODIM)"
+            >
+              <span>⚡</span>
+              <span>Auto Dim</span>
             </button>
           </div>
           <div style={{ textAlign: 'center', fontSize: '9px', color: '#6B7280', textTransform: 'uppercase', fontWeight: 700 }}>
