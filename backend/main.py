@@ -930,3 +930,29 @@ def export_project_ifc_endpoint(project_id: str):
     return Response(content=ifc_content, media_type="application/x-step", headers=headers)
 
 
+@app.post("/api/plumbing/water-hammer-analysis")
+def water_hammer_analysis_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Computes acoustic pressure wave velocity and Joukowsky transient water hammer surge
+    per PDI-WH 201 & ASSE 1010 standards.
+    """
+    from backend.plumbing_router import calculate_water_hammer_and_surge_protection
+    wsfu = float(payload.get("total_wsfu", 12.5))
+    vel = float(payload.get("flow_velocity_ms", 1.8))
+    mat = str(payload.get("pipe_material", "CPVC"))
+    return calculate_water_hammer_and_surge_protection(total_wsfu=wsfu, flow_velocity_ms=vel, pipe_material=mat)
+
+
+@app.post("/api/plumbing/drainage-slope-clearance")
+def drainage_slope_clearance_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Computes gravity soil & waste drainage fall, invert levels (IL), and ceiling plenum clearance.
+    Standards: UPC Table 702.1 & IPC 704.1.
+    """
+    from backend.plumbing_router import calculate_drainage_slopes_and_clearance
+    drain_len = float(payload.get("total_drain_length_m", 14.5))
+    pipes = payload.get("pipes", [])
+    return calculate_drainage_slopes_and_clearance(pipes=pipes, total_drain_length_m=drain_len)
+
+
+

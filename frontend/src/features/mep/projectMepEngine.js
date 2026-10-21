@@ -703,6 +703,100 @@ export function calculatePlumbingHydraulics(fixtures = [], pipes = []) {
 }
 
 /**
+ * Computes Joukowsky water hammer pressure surge & PDI-WH 201 arrestor sizing.
+ */
+export function calculateWaterHammerAndSurgeProtection(totalWsfu = 12.5, velocityMs = 1.8, pipeMaterial = 'CPVC') {
+  const rho = 1000.0;
+  const waveSpeed = pipeMaterial.toUpperCase() === 'CPVC' ? 600.0 : 1250.0;
+
+  const surgePa = rho * waveSpeed * velocityMs;
+  const surgeKpa = parseFloat((surgePa / 1000.0).toFixed(1));
+  const surgePsi = parseFloat((surgeKpa * 0.145038).toFixed(1));
+
+  const staticKpa = 300.0;
+  const peakKpa = parseFloat((staticKpa + surgeKpa).toFixed(1));
+  const peakPsi = parseFloat((peakKpa * 0.145038).toFixed(1));
+
+  const maxAllowableKpa = 1100.0;
+  const exceedsSafePressure = peakKpa > maxAllowableKpa;
+
+  let arrestorSize = "Size A (1 - 11 WSFU)";
+  let pdiCode = "A";
+  if (totalWsfu <= 11.0) {
+    arrestorSize = "Size A (1 - 11 WSFU)";
+    pdiCode = "A";
+  } else if (totalWsfu <= 32.0) {
+    arrestorSize = "Size B (12 - 32 WSFU)";
+    pdiCode = "B";
+  } else if (totalWsfu <= 60.0) {
+    arrestorSize = "Size C (33 - 60 WSFU)";
+    pdiCode = "C";
+  } else if (totalWsfu <= 113.0) {
+    arrestorSize = "Size D (61 - 113 WSFU)";
+    pdiCode = "D";
+  } else {
+    arrestorSize = "Size E (114 - 154 WSFU)";
+    pdiCode = "E";
+  }
+
+  const dampedPeakKpa = Math.min(peakKpa, 750.0);
+  const dampedPeakPsi = parseFloat((dampedPeakKpa * 0.145038).toFixed(1));
+
+  return {
+    waveSpeedMs: waveSpeed,
+    flowVelocityMs: velocityMs,
+    surgeKpa,
+    surgePsi,
+    peakKpa,
+    peakPsi,
+    maxAllowableKpa,
+    exceedsSafePressure,
+    arrestorSize,
+    pdiCode,
+    recommendedArrestors: ["WHA-01 (WC Flush Valve)", "WHA-02 (Kitchen / Utility Solenoid)"],
+    dampedPeakKpa,
+    dampedPeakPsi,
+    complianceStandard: "PDI-WH 201 / ASSE 1010 / UPC 609.10"
+  };
+}
+
+/**
+ * Computes gravity drainage falls, invert levels (IL), and ceiling plenum 3D clearance.
+ */
+export function calculateDrainageSlopesAndClearance(totalDrainLengthM = 14.5) {
+  const slopePercent = 2.5; // 1:40 gradient
+  const fallPerMeterMm = 25.0;
+
+  const totalFallMm = parseFloat((totalDrainLengthM * fallPerMeterMm).toFixed(1));
+  const trapInvertLevelM = -0.300;
+  const inspectionChamberIlM = parseFloat((trapInvertLevelM - (totalFallMm / 1000.0)).toFixed(3));
+
+  const slabSoffitZM = 2.85;
+  const finishedCeilingZM = 2.40;
+  const plenumDepthMm = parseFloat(((slabSoffitZM - finishedCeilingZM) * 1000.0).toFixed(1)); // 450 mm
+
+  const soilPipeOdMm = 110.0;
+  const requiredSpaceMm = parseFloat((totalFallMm + soilPipeOdMm).toFixed(1));
+  const clearanceMarginMm = parseFloat((plenumDepthMm - requiredSpaceMm).toFixed(1));
+  const isClearanceSafe = clearanceMarginMm >= 50.0;
+
+  return {
+    gradientRatio: "1:40 (2.5% Fall)",
+    fallPerMeterMm,
+    totalRunLengthM: totalDrainLengthM,
+    totalFallMm,
+    trapInvertLevelM,
+    inspectionChamberIlM,
+    plenumDepthMm,
+    requiredSpaceMm,
+    clearanceMarginMm,
+    isClearanceSafe,
+    status: isClearanceSafe ? "COMPLIANT_NO_COLLISION" : "RESERVED_FALL_WARNING",
+    standard: "UPC Table 702.1 / IPC Section 704.1"
+  };
+}
+
+/**
  * Calculates Comprehensive Engineering Bill of Quantities (BOQ) & Embodied Carbon Footprint.
  */
 export function calculateBillOfQuantities(solveData = {}) {

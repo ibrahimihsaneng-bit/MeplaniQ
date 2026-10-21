@@ -367,3 +367,108 @@ def auto_route_plumbing(
             )
             pipes.append(new_main)
             existing_ids.add(main_id)
+
+
+def calculate_water_hammer_and_surge_protection(
+    total_wsfu: float = 12.5,
+    flow_velocity_ms: float = 1.8,
+    pipe_material: str = "CPVC"
+) -> Dict[str, Any]:
+    """
+    Computes acoustic pressure wave velocity and Joukowsky transient water hammer surge
+    per PDI-WH 201 & ASSE 1010 standards.
+    Formula: Delta P_wh = rho * a * Delta v
+    """
+    rho = 1000.0  # Water density, kg/m³
+    wave_speed = 600.0 if pipe_material.upper() == "CPVC" else 1250.0  # m/s
+
+    surge_pa = rho * wave_speed * flow_velocity_ms
+    surge_kpa = round(surge_pa / 1000.0, 1)
+    surge_psi = round(surge_kpa * 0.145038, 1)
+
+    static_kpa = 300.0  # Nominal operating pressure, ~43.5 psi
+    peak_kpa = round(static_kpa + surge_kpa, 1)
+    peak_psi = round(peak_kpa * 0.145038, 1)
+
+    # Maximum test pressure rating for CPVC schedule 40 / 80
+    max_allowable_kpa = 1100.0
+    exceeds_safe_pressure = peak_kpa > max_allowable_kpa
+
+    # PDI-WH 201 Arrestor Sizing Rules
+    if total_wsfu <= 11.0:
+        arrestor_size = "Size A (1 - 11 WSFU)"
+        pdi_code = "A"
+    elif total_wsfu <= 32.0:
+        arrestor_size = "Size B (12 - 32 WSFU)"
+        pdi_code = "B"
+    elif total_wsfu <= 60.0:
+        arrestor_size = "Size C (33 - 60 WSFU)"
+        pdi_code = "C"
+    elif total_wsfu <= 113.0:
+        arrestor_size = "Size D (61 - 113 WSFU)"
+        pdi_code = "D"
+    else:
+        arrestor_size = "Size E (114 - 154 WSFU)"
+        pdi_code = "E"
+
+    damped_peak_kpa = min(peak_kpa, 750.0)
+    damped_peak_psi = round(damped_peak_kpa * 0.145038, 1)
+
+    return {
+        "wave_speed_ms": wave_speed,
+        "flow_velocity_ms": flow_velocity_ms,
+        "surge_kpa": surge_kpa,
+        "surge_psi": surge_psi,
+        "peak_kpa": peak_kpa,
+        "peak_psi": peak_psi,
+        "max_allowable_kpa": max_allowable_kpa,
+        "exceeds_safe_pressure": exceeds_safe_pressure,
+        "arrestor_size": arrestor_size,
+        "pdi_code": pdi_code,
+        "recommended_arrestors": ["WHA-01 (WC Flush Valve)", "WHA-02 (Kitchen / Utility Solenoid)"],
+        "damped_peak_kpa": damped_peak_kpa,
+        "damped_peak_psi": damped_peak_psi,
+        "compliance_standard": "PDI-WH 201 / ASSE 1010 / UPC 609.10"
+    }
+
+
+def calculate_drainage_slopes_and_clearance(
+    pipes: List[Dict[str, Any]] = None,
+    total_drain_length_m: float = 14.5
+) -> Dict[str, Any]:
+    """
+    Computes gravity soil & waste drainage fall, invert levels (IL), and ceiling plenum clearance.
+    Standards: UPC Table 702.1 & IPC 704.1 (1:40 / 2.5% for Ø110, 1:50 / 2.0% for Ø75/Ø50).
+    """
+    slope_percent = 2.5  # 1:40 gradient
+    fall_per_meter_mm = 25.0  # mm/m
+
+    total_fall_mm = round(total_drain_length_m * fall_per_meter_mm, 1)
+    trap_invert_level_m = -0.300
+    inspection_chamber_il_m = round(trap_invert_level_m - (total_fall_mm / 1000.0), 3)
+
+    # Ceiling Plenum 3D Clearance Check
+    slab_soffit_z_m = 2.85
+    finished_ceiling_z_m = 2.40
+    plenum_depth_mm = round((slab_soffit_z_m - finished_ceiling_z_m) * 1000.0, 1)  # 450 mm
+
+    soil_pipe_od_mm = 110.0
+    required_space_mm = round(total_fall_mm + soil_pipe_od_mm, 1)
+    clearance_margin_mm = round(plenum_depth_mm - required_space_mm, 1)
+    is_clearance_safe = clearance_margin_mm >= 50.0  # At least 50mm buffer
+
+    return {
+        "gradient_ratio": "1:40 (2.5% Fall)",
+        "fall_per_meter_mm": fall_per_meter_mm,
+        "total_run_length_m": total_drain_length_m,
+        "total_fall_mm": total_fall_mm,
+        "trap_invert_level_m": trap_invert_level_m,
+        "inspection_chamber_il_m": inspection_chamber_il_m,
+        "plenum_depth_mm": plenum_depth_mm,
+        "required_space_mm": required_space_mm,
+        "clearance_margin_mm": clearance_margin_mm,
+        "is_clearance_safe": is_clearance_safe,
+        "status": "COMPLIANT_NO_COLLISION" if is_clearance_safe else "RESERVED_FALL_WARNING",
+        "standard": "UPC Table 702.1 / IPC Section 704.1"
+    }
+

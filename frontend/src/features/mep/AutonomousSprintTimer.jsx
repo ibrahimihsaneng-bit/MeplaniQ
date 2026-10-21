@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 8, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 9, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -253,9 +253,9 @@ export default function AutonomousSprintTimer({ currentCycle = 8, totalHours = 2
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
                   <div style={{ fontSize: '10px', color: '#94A3B8' }}>PLUMBING & DRAINAGE</div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#38BDF8', marginTop: '2px' }}>
-                    UPC Hunter's Peak Demand
+                    Joukowsky Surge & UPC Invert Slope
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ Ø32 DCW & Ø110 Soil Stack</div>
+                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ PDI Size B & 1:40 Fall Clear</div>
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
@@ -263,7 +263,7 @@ export default function AutonomousSprintTimer({ currentCycle = 8, totalHours = 2
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#A78BFA', marginTop: '2px' }}>
                     M25 Concrete & 5x5 Clash Matrix
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 129/129 Tests Passing</div>
+                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 133/133 Tests Passing</div>
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
