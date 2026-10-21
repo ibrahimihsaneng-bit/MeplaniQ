@@ -2958,6 +2958,7 @@ export default function EditorPage() {
         <AutoCad3DViewport
           entities={cadEntities}
           detectedRooms={detectedRoomsMemo}
+          solveData={solveData}
           onClose={() => setIs3DViewActive(false)}
         />
       )}

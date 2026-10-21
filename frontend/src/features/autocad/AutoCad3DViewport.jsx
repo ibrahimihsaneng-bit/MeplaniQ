@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { dist } from './cadGeometryUtils';
+import { generateBlenderPythonScript } from '../mep/blenderExportBridge';
 
 /**
  * AutoCad3DViewport.jsx
@@ -11,6 +12,7 @@ import { dist } from './cadGeometryUtils';
 export default function AutoCad3DViewport({
   entities = [],
   detectedRooms = [],
+  solveData = null,
   onClose
 }) {
   // Camera & Orbit Angles
@@ -30,6 +32,20 @@ export default function AutoCad3DViewport({
   const [showElec, setShowElec] = useState(true);
   const [showPlumb, setShowPlumb] = useState(true);
   const [showLightCones, setShowLightCones] = useState(true);
+
+  // Export standalone Blender Python scene script (.py)
+  const handleExportBlender = () => {
+    const pyScript = generateBlenderPythonScript(entities, solveData, solveData?.project_name || "MeplanIQ 3D Model");
+    const blob = new Blob([pyScript], { type: 'text/x-python' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(solveData?.project_name || 'meplaniq_bim').replace(/\s+/g, '_')}_blender.py`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Calculate drawing bounding center to anchor rotation pivot
   const centerPivot = useMemo(() => {
@@ -503,6 +519,28 @@ export default function AutoCad3DViewport({
             style={{ background: '#0284C7', border: '1px solid #38BDF8', color: '#FFFFFF', padding: '4px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px', fontWeight: 700 }}
           >
             Reset
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportBlender}
+            style={{
+              background: 'linear-gradient(135deg, #EA580C 0%, #C2410C 100%)',
+              border: '1px solid #FB923C',
+              color: '#FFFFFF',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '10px',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(234, 88, 12, 0.4)'
+            }}
+            title="Download automated Blender Python script (.py) to import and render this full 3D BIM model in Blender"
+          >
+            <span>📦 Blender (.py)</span>
           </button>
         </div>
 
