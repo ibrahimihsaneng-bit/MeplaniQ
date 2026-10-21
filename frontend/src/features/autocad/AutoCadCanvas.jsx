@@ -1346,6 +1346,145 @@ export default function AutoCadCanvas({
               );
             }
 
+            if (ent.type === 'mep-duct' && ent.p1 && ent.p2) {
+              const ductW = (ent.width || 250);
+              const angle = Math.atan2(ent.p2.y - ent.p1.y, ent.p2.x - ent.p1.x);
+              const perpX = Math.sin(angle) * (ductW / 2);
+              const perpY = -Math.cos(angle) * (ductW / 2);
+              const midX = (ent.p1.x + ent.p2.x) / 2;
+              const midY = (ent.p1.y + ent.p2.y) / 2;
+              return (
+                <g key={entKey} className="cad-mep-duct">
+                  <polygon
+                    points={`${ent.p1.x + perpX},${ent.p1.y + perpY} ${ent.p2.x + perpX},${ent.p2.y + perpY} ${ent.p2.x - perpX},${ent.p2.y - perpY} ${ent.p1.x - perpX},${ent.p1.y - perpY}`}
+                    fill="rgba(251, 146, 60, 0.16)"
+                    stroke="#FB923C"
+                    strokeWidth={1.8 / zoom}
+                  />
+                  <line
+                    x1={ent.p1.x}
+                    y1={ent.p1.y}
+                    x2={ent.p2.x}
+                    y2={ent.p2.y}
+                    stroke="#FDBA74"
+                    strokeWidth={1.2 / zoom}
+                    strokeDasharray="200 80"
+                    opacity={0.7}
+                  />
+                  {ent.label && (
+                    <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect x="-48" y="-9" width="96" height="18" rx="3" fill="#0A0E17" stroke="#FB923C" strokeWidth="0.8" />
+                      <text x="0" y="3" textAnchor="middle" dominantBaseline="middle" fill="#FED7AA" fontSize="9" fontWeight="700">
+                        {ent.label}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            }
+
+            if (ent.type === 'air-terminal' && ent.center) {
+              const sz = ent.size || 450;
+              const half = sz / 2;
+              const isSupply = ent.subType !== 'return';
+              const termColor = isSupply ? '#FB923C' : '#60A5FA';
+              return (
+                <g key={entKey} className="cad-air-terminal">
+                  <rect
+                    x={ent.center.x - half}
+                    y={ent.center.y - half}
+                    width={sz}
+                    height={sz}
+                    fill="#1E293B"
+                    stroke={termColor}
+                    strokeWidth={2 / zoom}
+                  />
+                  <line x1={ent.center.x - half} y1={ent.center.y - half} x2={ent.center.x + half} y2={ent.center.y + half} stroke={termColor} strokeWidth={1.2 / zoom} />
+                  <line x1={ent.center.x - half} y1={ent.center.y + half} x2={ent.center.x + half} y2={ent.center.y - half} stroke={termColor} strokeWidth={1.2 / zoom} />
+                  <circle cx={ent.center.x} cy={ent.center.y} r={sz * 0.18} fill="#0A0E17" stroke={termColor} strokeWidth={1.2 / zoom} />
+                  <g transform={`translate(${ent.center.x}, ${ent.center.y - half - 120}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                    <rect x="-35" y="-8" width="70" height="16" rx="3" fill="#0F172A" stroke={termColor} strokeWidth="0.8" />
+                    <text x="0" y="2" textAnchor="middle" dominantBaseline="middle" fill="#FFFFFF" fontSize="8" fontWeight="700">
+                      {ent.cfm} CFM
+                    </text>
+                  </g>
+                </g>
+              );
+            }
+
+            if (ent.type === 'mep-pipe' && ent.p1 && ent.p2) {
+              const isDCW = ent.pipeType === 'DCW';
+              const pipeColor = isDCW ? '#38BDF8' : '#10B981';
+              const pipeWidth = (isDCW ? 2.5 : 3.5) / zoom;
+              const midX = (ent.p1.x + ent.p2.x) / 2;
+              const midY = (ent.p1.y + ent.p2.y) / 2;
+              return (
+                <g key={entKey} className="cad-mep-pipe">
+                  <line
+                    x1={ent.p1.x}
+                    y1={ent.p1.y}
+                    x2={ent.p2.x}
+                    y2={ent.p2.y}
+                    stroke={pipeColor}
+                    strokeWidth={pipeWidth}
+                    strokeLinecap="round"
+                    strokeDasharray={isDCW ? undefined : "300 80"}
+                  />
+                  <circle cx={ent.p1.x} cy={ent.p1.y} r={6 / zoom} fill={pipeColor} />
+                  <circle cx={ent.p2.x} cy={ent.p2.y} r={6 / zoom} fill={pipeColor} />
+                  {ent.label && (
+                    <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect x="-40" y="-8" width="80" height="16" rx="3" fill="#020617" stroke={pipeColor} strokeWidth="0.8" />
+                      <text x="0" y="2" textAnchor="middle" dominantBaseline="middle" fill={isDCW ? '#BAE6FD' : '#A7F3D0'} fontSize="8" fontWeight="700">
+                        {ent.label}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            }
+
+            if (ent.type === 'equipment' && ent.center) {
+              const eqW = ent.width || 600;
+              const eqH = ent.height || 400;
+              const isAhu = ent.subType === 'ahu';
+              const isManhole = ent.subType === 'manhole';
+              const eqColor = isAhu ? '#FB923C' : (isManhole ? '#10B981' : '#38BDF8');
+              return (
+                <g key={entKey} className="cad-mep-equipment">
+                  {isManhole ? (
+                    <circle
+                      cx={ent.center.x}
+                      cy={ent.center.y}
+                      r={eqW / 2}
+                      fill="#0F172A"
+                      stroke={eqColor}
+                      strokeWidth={2.5 / zoom}
+                    />
+                  ) : (
+                    <rect
+                      x={ent.center.x - eqW / 2}
+                      y={ent.center.y - eqH / 2}
+                      width={eqW}
+                      height={eqH}
+                      rx={6 / zoom}
+                      fill="#0F172A"
+                      stroke={eqColor}
+                      strokeWidth={2.5 / zoom}
+                    />
+                  )}
+                  {isAhu && (
+                    <circle cx={ent.center.x} cy={ent.center.y} r={eqH * 0.3} fill="none" stroke="#FB923C" strokeWidth={1.5 / zoom} />
+                  )}
+                  <g transform={`translate(${ent.center.x}, ${ent.center.y}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                    <text x="0" y="3" textAnchor="middle" dominantBaseline="middle" fill="#F8FAFC" fontSize="10" fontWeight="800">
+                      {ent.label}
+                    </text>
+                  </g>
+                </g>
+              );
+            }
+
             if (ent.type === 'block') {
               return <g key={entKey}>{renderCadBlock(ent, isSelected, zoom)}</g>;
             }

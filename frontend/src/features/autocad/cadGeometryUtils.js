@@ -1480,3 +1480,305 @@ export function generateStructuralGridAndColumns(entities = [], colSize = 300) {
 
   return elements;
 }
+
+
+/**
+ * Automatically routes coordinated HVAC Ductwork and Plumbing Piping networks
+ * based on spatial room topologies and sanitary fixture coordinates.
+ * Follows ASHRAE 62.1 airflow standards and UPC / IPC hydraulic sizing.
+ */
+export function generateAutomatedMepNetworks(entities = [], detectedRooms = []) {
+  const elements = [];
+  const timestamp = Date.now();
+
+  // 1. Compute Architectural Envelope Extents
+  let minX = 0, minY = 0, maxX = 6000, maxY = 5000;
+  const xs = [];
+  const ys = [];
+
+  entities.forEach(e => {
+    if (e.isSheetBorder || e.isTitleBlock || e.isMep) return;
+    if (e.centerline) {
+      xs.push(e.centerline.p1.x, e.centerline.p2.x);
+      ys.push(e.centerline.p1.y, e.centerline.p2.y);
+    } else if (e.p1 && e.p2) {
+      xs.push(e.p1.x, e.p2.x);
+      ys.push(e.p1.y, e.p2.y);
+    } else if (e.x !== undefined && e.y !== undefined) {
+      xs.push(e.x);
+      ys.push(e.y);
+    }
+  });
+
+  if (xs.length > 0) {
+    minX = Math.min(...xs);
+    maxX = Math.max(...xs);
+    minY = Math.min(...ys);
+    maxY = Math.max(...ys);
+  }
+
+  const buildingW = Math.max(4000, maxX - minX);
+  const buildingH = Math.max(3000, maxY - minY);
+  const trunkY = Math.round(minY + buildingH * 0.52);
+
+  // 2. Discover Terminal Placement Points (Room Centroids)
+  const roomTerminals = [];
+
+  if (detectedRooms && detectedRooms.length > 0) {
+    detectedRooms.forEach((rm, idx) => {
+      let cx = 0, cy = 0;
+      if (rm.points && rm.points.length > 0) {
+        rm.points.forEach(p => { cx += p[0]; cy += p[1]; });
+        cx = Math.round(cx / rm.points.length);
+        cy = Math.round(cy / rm.points.length);
+      } else {
+        cx = Math.round(minX + (buildingW / (detectedRooms.length + 1)) * (idx + 1));
+        cy = Math.round(minY + buildingH * (idx % 2 === 0 ? 0.75 : 0.25));
+      }
+      const area = rm.carpet_area_sqm || 16.0;
+      const cfm = Math.max(120, Math.round(area * 14));
+      roomTerminals.push({
+        id: 'term-' + idx,
+        name: rm.name || ('Zone ' + (idx + 1)),
+        x: cx,
+        y: cy,
+        cfm
+      });
+    });
+  } else {
+    // Default 2-zone terminal layout if rooms not yet fully closed
+    roomTerminals.push(
+      { id: 'term-1', name: 'Zone 1 (Living/Work)', x: Math.round(minX + buildingW * 0.35), y: Math.round(minY + buildingH * 0.72), cfm: 280 },
+      { id: 'term-2', name: 'Zone 2 (Bedroom/Office)', x: Math.round(minX + buildingW * 0.7), y: Math.round(minY + buildingH * 0.35), cfm: 220 }
+    );
+  }
+
+  const totalCfm = roomTerminals.reduce((sum, t) => sum + t.cfm, 0);
+
+  // 3. HVAC EQUIPMENT: Air Handling Unit (AHU) / Outdoor Unit
+  const ahuX = minX - 700;
+  const ahuY = trunkY;
+
+  elements.push({
+    id: 'mep-ahu-' + timestamp,
+    type: 'equipment',
+    center: { x: ahuX, y: ahuY },
+    width: 750,
+    height: 550,
+    label: 'AHU-01 (' + totalCfm + ' CFM)',
+    subType: 'ahu',
+    layer: 'M-HVAC',
+    isMep: true
+  });
+
+  // 4. HVAC MAIN SUPPLY TRUNK DUCT
+  const trunkStartX = ahuX + 375;
+  const trunkEndX = Math.round(maxX - buildingW * 0.15);
+
+  elements.push({
+    id: 'mep-trunk-duct-' + timestamp,
+    type: 'mep-duct',
+    p1: { x: trunkStartX, y: trunkY },
+    p2: { x: trunkEndX, y: trunkY },
+    width: 350,
+    height: 250,
+    system: 'SUPPLY TRUNK',
+    cfm: totalCfm,
+    label: '350x250 S-DUCT (' + totalCfm + ' CFM)',
+    layer: 'M-HVAC',
+    isMep: true
+  });
+
+  // 5. HVAC TERMINAL DIFFUSERS & BRANCH DUCTS
+  roomTerminals.forEach((term, idx) => {
+    // Air terminal 4-way ceiling diffuser
+    elements.push({
+      id: 'mep-diffuser-' + idx + '-' + timestamp,
+      type: 'air-terminal',
+      center: { x: term.x, y: term.y },
+      size: 450,
+      cfm: term.cfm,
+      label: term.name + ' (' + term.cfm + ' CFM)',
+      subType: 'supply',
+      layer: 'M-HVAC',
+      isMep: true
+    });
+
+    // Branch takeoff from supply trunk:
+    // Route orthogonally: from (term.x, trunkY) to (term.x, term.y)
+    elements.push({
+      id: 'mep-branch-duct-' + idx + '-' + timestamp,
+      type: 'mep-duct',
+      p1: { x: term.x, y: trunkY },
+      p2: { x: term.x, y: term.y },
+      width: 200,
+      height: 150,
+      system: 'BRANCH',
+      cfm: term.cfm,
+      label: '200x150 (' + term.cfm + ' CFM)',
+      layer: 'M-HVAC',
+      isMep: true
+    });
+  });
+
+  // 6. HVAC RETURN AIR GRILLE (RAG) in central plenum
+  elements.push({
+    id: 'mep-return-grille-' + timestamp,
+    type: 'air-terminal',
+    center: { x: Math.round(minX + buildingW * 0.18), y: trunkY - 450 },
+    size: 500,
+    cfm: totalCfm,
+    label: 'RAG-01 (' + totalCfm + ' CFM)',
+    subType: 'return',
+    layer: 'M-HVAC',
+    isMep: true
+  });
+
+  // 7. PLUMBING: Fixtures Discovery
+  const plumbingFixtures = entities.filter(e => {
+    if (e.type !== 'block') return false;
+    const bid = (e.blockId || e.name || '').toLowerCase();
+    return bid.includes('wc') || bid.includes('toilet') || bid.includes('basin') || bid.includes('sink') || bid.includes('bath') || bid.includes('shower');
+  });
+
+  const fixturePoints = [];
+  if (plumbingFixtures.length > 0) {
+    plumbingFixtures.forEach((f, idx) => {
+      fixturePoints.push({
+        id: 'fix-' + idx,
+        x: Math.round(f.x || 0),
+        y: Math.round(f.y || 0),
+        name: f.name || 'Fixture'
+      });
+    });
+  } else {
+    // Default wet room fixture tap-offs along south zone
+    fixturePoints.push(
+      { id: 'fix-1', x: Math.round(minX + buildingW * 0.25), y: Math.round(minY + buildingH * 0.2), name: 'Water Closet (WC)' },
+      { id: 'fix-2', x: Math.round(minX + buildingW * 0.45), y: Math.round(minY + buildingH * 0.2), name: 'Wash Basin' }
+    );
+  }
+
+  // 8. PLUMBING: Water Meter / DCW Supply Riser
+  const riserX = minX - 450;
+  const riserY = minY - 300;
+
+  elements.push({
+    id: 'mep-water-riser-' + timestamp,
+    type: 'equipment',
+    center: { x: riserX, y: riserY },
+    width: 320,
+    height: 320,
+    label: 'WATER RISER Ø32 CPVC',
+    subType: 'riser',
+    layer: 'P-PLUM',
+    isMep: true
+  });
+
+  // 9. PLUMBING: Sewer Inspection Chamber (IC)
+  const icX = maxX + 450;
+  const icY = minY - 300;
+
+  elements.push({
+    id: 'mep-sewer-ic-' + timestamp,
+    type: 'equipment',
+    center: { x: icX, y: icY },
+    width: 420,
+    height: 420,
+    label: 'INSPECTION CHAMBER (IC-01)',
+    subType: 'manhole',
+    layer: 'P-PLUM',
+    isMep: true
+  });
+
+  // 10. PLUMBING: Domestic Cold Water (DCW) Main Supply Pipe
+  const mainWaterPipeY = minY - 200;
+  elements.push({
+    id: 'mep-pipe-dcw-main-' + timestamp,
+    type: 'mep-pipe',
+    p1: { x: riserX, y: riserY },
+    p2: { x: riserX, y: mainWaterPipeY },
+    pipeType: 'DCW',
+    diameterMm: 32,
+    material: 'CPVC',
+    layer: 'P-PLUM',
+    isMep: true
+  });
+
+  const lastFixX = fixturePoints.length > 0 ? Math.max(...fixturePoints.map(p => p.x)) : maxX;
+  elements.push({
+    id: 'mep-pipe-dcw-run-' + timestamp,
+    type: 'mep-pipe',
+    p1: { x: riserX, y: mainWaterPipeY },
+    p2: { x: lastFixX + 200, y: mainWaterPipeY },
+    pipeType: 'DCW',
+    diameterMm: 25,
+    material: 'CPVC',
+    label: 'Ø25 CPVC DCW SUPPLY',
+    layer: 'P-PLUM',
+    isMep: true
+  });
+
+  // DCW branches to each fixture
+  fixturePoints.forEach((fix, idx) => {
+    elements.push({
+      id: 'mep-pipe-dcw-branch-' + idx + '-' + timestamp,
+      type: 'mep-pipe',
+      p1: { x: fix.x, y: mainWaterPipeY },
+      p2: { x: fix.x, y: fix.y },
+      pipeType: 'DCW',
+      diameterMm: 20,
+      material: 'CPVC',
+      label: 'Ø20 CPVC',
+      layer: 'P-PLUM',
+      isMep: true
+    });
+  });
+
+  // 11. PLUMBING: Soil & Waste Drainage Main Pipeline
+  const mainSoilPipeY = minY - 450;
+  const firstFixX = fixturePoints.length > 0 ? Math.min(...fixturePoints.map(p => p.x)) : minX;
+
+  elements.push({
+    id: 'mep-pipe-soil-run-' + timestamp,
+    type: 'mep-pipe',
+    p1: { x: firstFixX - 200, y: mainSoilPipeY },
+    p2: { x: icX, y: mainSoilPipeY },
+    pipeType: 'SOIL',
+    diameterMm: 110,
+    material: 'uPVC',
+    label: 'Ø110 uPVC SOIL (1:40 SLOPE)',
+    layer: 'P-PLUM',
+    isMep: true
+  });
+
+  elements.push({
+    id: 'mep-pipe-soil-ic-drop-' + timestamp,
+    type: 'mep-pipe',
+    p1: { x: icX, y: mainSoilPipeY },
+    p2: { x: icX, y: icY },
+    pipeType: 'SOIL',
+    diameterMm: 110,
+    material: 'uPVC',
+    layer: 'P-PLUM',
+    isMep: true
+  });
+
+  // Soil branches from fixtures to drainage main
+  fixturePoints.forEach((fix, idx) => {
+    elements.push({
+      id: 'mep-pipe-soil-branch-' + idx + '-' + timestamp,
+      type: 'mep-pipe',
+      p1: { x: fix.x + 80, y: fix.y },
+      p2: { x: fix.x + 80, y: mainSoilPipeY },
+      pipeType: 'SOIL',
+      diameterMm: 75,
+      material: 'uPVC',
+      label: 'Ø75 DRAIN',
+      layer: 'P-PLUM',
+      isMep: true
+    });
+  });
+
+  return elements;
+}

@@ -19,7 +19,8 @@ import {
   generateAutoDimensions,
   generateScheduleTable,
   generateTitleBlockAndBorder,
-  generateStructuralGridAndColumns
+  generateStructuralGridAndColumns,
+  generateAutomatedMepNetworks
 } from '../features/autocad/cadGeometryUtils';
 import { fetchProjectById, updateProjectById, createManualProject, solveCadGeometry, exportDxf } from '../api';
 import Toast from '../Toast';
@@ -286,6 +287,22 @@ export default function AutoCadPage() {
       showToast("No walls found to compute structural column grid", "info");
     }
   }, [entities, setEntities, appendHistory, showToast]);
+
+  const handleGenerateAutomatedMep = useCallback(() => {
+    const mepElements = generateAutomatedMepNetworks(entities, detectedRooms);
+    if (mepElements.length > 0) {
+      // Remove any previous MEP entities if re-running
+      const cleanEntities = entities.filter(e => !e.isMep);
+      setEntities([...cleanEntities, ...mepElements]);
+      const ductCount = mepElements.filter(e => e.type === 'mep-duct').length;
+      const termCount = mepElements.filter(e => e.type === 'air-terminal').length;
+      const pipeCount = mepElements.filter(e => e.type === 'mep-pipe').length;
+      appendHistory(`MEP: Routed coordinated MEP systems (${ductCount} supply duct runs, ${termCount} diffusers/grilles, and ${pipeCount} water/soil pipe runs).`);
+      showToast(`Generated ${ductCount} ducts & ${pipeCount} plumbing lines!`, "success");
+    } else {
+      showToast("No walls found to route MEP systems", "info");
+    }
+  }, [entities, detectedRooms, setEntities, appendHistory, showToast]);
 
   const handleFlipDoorSwing = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -570,6 +587,13 @@ export default function AutoCadPage() {
         handleGenerateStructuralGrid();
         break;
 
+      case 'MEP':
+      case 'AUTODUCT':
+      case 'AUTOPLUMB':
+      case 'DUCTS':
+        handleGenerateAutomatedMep();
+        break;
+
       case 'U':
       case 'UNDO':
         if (undo()) appendHistory("UNDO");
@@ -598,7 +622,7 @@ export default function AutoCadPage() {
         appendHistory(`Unknown command "${cleanCmd}". Type WALL, DOOR, WINDOW, FILLET, LINE, REC, DIM, or BLK.`, 'error');
         break;
     }
-  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, handleInsertTitleBlock, handleGenerateStructuralGrid, appendHistory]);
+  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, handleInsertTitleBlock, handleGenerateStructuralGrid, handleGenerateAutomatedMep, appendHistory]);
 
   // Coordinate Input Handler
   const handleCoordinateSubmit = useCallback((coordStr) => {
@@ -807,6 +831,7 @@ export default function AutoCadPage() {
         onInsertScheduleTable={handleInsertScheduleTable}
         onInsertTitleBlock={handleInsertTitleBlock}
         onGenerateStructuralGrid={handleGenerateStructuralGrid}
+        onGenerateAutomatedMep={handleGenerateAutomatedMep}
         settings={settings}
         onUpdateSetting={updateSetting}
         canUndo={canUndo}

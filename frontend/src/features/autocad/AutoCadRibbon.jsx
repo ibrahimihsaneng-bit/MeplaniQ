@@ -18,6 +18,7 @@ export default function AutoCadRibbon({
   onInsertScheduleTable,
   onInsertTitleBlock,
   onGenerateStructuralGrid,
+  onGenerateAutomatedMep,
   showWallDimensions,
   onToggleWallDimensions,
   settings,
@@ -316,6 +317,28 @@ export default function AutoCadRibbon({
           >
             <span>🏛️</span>
             <span>Grid & Cols</span>
+          </button>
+
+          {/* Generate Automated Coordinated MEP Networks */}
+          <button
+            type="button"
+            onClick={onGenerateAutomatedMep}
+            title="Auto-route coordinated HVAC Supply Trunk & Diffusers and Domestic Cold Water & Drainage Networks (MEP / AUTODUCT)"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #FB923C',
+              color: '#FDBA74',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <span>💨</span>
+            <span>Auto MEP</span>
           </button>
 
           {/* Convert Linework to MEPlanIQ Solved Rooms */}
