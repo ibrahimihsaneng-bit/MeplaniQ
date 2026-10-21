@@ -17,6 +17,7 @@ export default function AutoCadRibbon({
   onAutoDimensionAll,
   onInsertScheduleTable,
   onInsertTitleBlock,
+  onGenerateStructuralGrid,
   showWallDimensions,
   onToggleWallDimensions,
   settings,
@@ -293,6 +294,28 @@ export default function AutoCadRibbon({
           >
             <span>🔲</span>
             <span>Title Block</span>
+          </button>
+
+          {/* Generate Structural Column Grid & Axis Bubbles */}
+          <button
+            type="button"
+            onClick={onGenerateStructuralGrid}
+            title="Auto-generate Reinforced Concrete Columns (300x300) and Structural Grid Axes (A, B, C... / 1, 2, 3...) (GRID / COLS)"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #F87171',
+              color: '#FCA5A5',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <span>🏛️</span>
+            <span>Grid & Cols</span>
           </button>
 
           {/* Convert Linework to MEPlanIQ Solved Rooms */}

@@ -18,7 +18,8 @@ import {
   recalculateDoorGeometry,
   generateAutoDimensions,
   generateScheduleTable,
-  generateTitleBlockAndBorder
+  generateTitleBlockAndBorder,
+  generateStructuralGridAndColumns
 } from '../features/autocad/cadGeometryUtils';
 import { fetchProjectById, updateProjectById, createManualProject, solveCadGeometry, exportDxf } from '../api';
 import Toast from '../Toast';
@@ -270,6 +271,21 @@ export default function AutoCadPage() {
     appendHistory(`SHEET: Fitted ISO 5457 A1 Sheet Border & ISO 7200 Title Block with North Arrow (${borderEntities.length} entities).`);
     showToast("ISO A1 Sheet Border & Title Block stamped!", "success");
   }, [entities, projectName, setEntities, appendHistory, showToast]);
+
+  const handleGenerateStructuralGrid = useCallback(() => {
+    const structuralElements = generateStructuralGridAndColumns(entities, 300);
+    if (structuralElements.length > 0) {
+      // Remove any existing structural columns/gridlines if regenerating
+      const cleanEntities = entities.filter(e => !e.isStructural);
+      setEntities([...cleanEntities, ...structuralElements]);
+      const colCount = structuralElements.filter(e => e.type === 'column').length;
+      const gridCount = structuralElements.filter(e => e.type === 'gridline').length;
+      appendHistory(`GRID: Placed ${colCount} reinforced concrete columns (300x300mm) and ${gridCount} structural grid axes with inter-bay dimensions.`);
+      showToast(`Generated ${colCount} columns and ${gridCount} grid axes!`, "success");
+    } else {
+      showToast("No walls found to compute structural column grid", "info");
+    }
+  }, [entities, setEntities, appendHistory, showToast]);
 
   const handleFlipDoorSwing = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -547,6 +563,13 @@ export default function AutoCadPage() {
         handleInsertTitleBlock();
         break;
 
+      case 'GRID':
+      case 'COLS':
+      case 'COLUMN':
+      case 'COLUMNS':
+        handleGenerateStructuralGrid();
+        break;
+
       case 'U':
       case 'UNDO':
         if (undo()) appendHistory("UNDO");
@@ -575,7 +598,7 @@ export default function AutoCadPage() {
         appendHistory(`Unknown command "${cleanCmd}". Type WALL, DOOR, WINDOW, FILLET, LINE, REC, DIM, or BLK.`, 'error');
         break;
     }
-  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, handleInsertTitleBlock, appendHistory]);
+  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, handleInsertTitleBlock, handleGenerateStructuralGrid, appendHistory]);
 
   // Coordinate Input Handler
   const handleCoordinateSubmit = useCallback((coordStr) => {
@@ -783,6 +806,7 @@ export default function AutoCadPage() {
         onAutoDimensionAll={handleAutoDimensionAll}
         onInsertScheduleTable={handleInsertScheduleTable}
         onInsertTitleBlock={handleInsertTitleBlock}
+        onGenerateStructuralGrid={handleGenerateStructuralGrid}
         settings={settings}
         onUpdateSetting={updateSetting}
         canUndo={canUndo}

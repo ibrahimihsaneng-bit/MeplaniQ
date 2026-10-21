@@ -18,6 +18,7 @@ export default function AutoCadEngineeringPanel({
   const doors = useMemo(() => entities.filter(e => e.type === 'door'), [entities]);
   const windows = useMemo(() => entities.filter(e => e.type === 'window'), [entities]);
   const blocks = useMemo(() => entities.filter(e => e.type === 'block'), [entities]);
+  const columns = useMemo(() => entities.filter(e => e.type === 'column'), [entities]);
 
   // Total Wall Length in meters
   const totalWallLengthM = useMemo(() => {
@@ -190,18 +191,29 @@ export default function AutoCadEngineeringPanel({
     const rateFlooring = 1100;  // per m2
     const rateDoor = 8500;      // per door
     const rateWindow = 6500;    // per window
+    const rateConcreteM3 = 7200; // M25 concrete per m3
+    const rateSteelKg = 75;      // Fe500 rebar per kg
+
+    const colCount = columns.length;
+    const colConcM3 = Math.round(colCount * 0.3 * 0.3 * wallHeight * 10) / 10;
+    const colSteelKg = Math.round(colConcM3 * 160);
+    const costColumns = Math.round((colConcM3 * rateConcreteM3) + (colSteelKg * rateSteelKg));
 
     const costBrickwork = brickworkM3 * rateBrickwork;
     const costPlaster = plasterAreaM2 * ratePlaster;
     const costFlooring = flooringM2 * rateFlooring;
     const costDoors = doors.length * rateDoor;
     const costWindows = windows.length * rateWindow;
-    const totalEstCivilCost = costBrickwork + costPlaster + costFlooring + costDoors + costWindows;
+    const totalEstCivilCost = costBrickwork + costPlaster + costFlooring + costDoors + costWindows + costColumns;
 
     return {
       brickworkM3,
       plasterAreaM2,
       flooringM2,
+      colCount,
+      colConcM3,
+      colSteelKg,
+      costColumns,
       costBrickwork,
       costPlaster,
       costFlooring,
@@ -209,7 +221,7 @@ export default function AutoCadEngineeringPanel({
       costWindows,
       totalEstCivilCost
     };
-  }, [totalWallLengthM, totalWindowAreaSqm, doors.length, windows.length, totalCarpetAreaSqm]);
+  }, [totalWallLengthM, totalWindowAreaSqm, doors.length, windows.length, columns.length, totalCarpetAreaSqm]);
 
   // CSV Export Handler
   const handleExportCsv = () => {
@@ -258,6 +270,7 @@ export default function AutoCadEngineeringPanel({
       ["4. BILL OF QUANTITIES (BOQ) SUMMARY"],
       ["Item", "Quantity", "Unit", "Est. Amount (INR)"],
       ["Brickwork / Masonry", boqData.brickworkM3, "m3", boqData.costBrickwork],
+      ["R.C.C. Columns (M25 + Fe500)", `${boqData.colConcM3} m3 (${boqData.colCount} Cols)`, "m3", boqData.costColumns],
       ["Cement Plaster (1:4, 15mm)", boqData.plasterAreaM2, "m2", boqData.costPlaster],
       ["Vitrified Tile Flooring", boqData.flooringM2, "m2", boqData.costFlooring],
       ["Architectural Flush Doors", doors.length, "Nos", boqData.costDoors],
@@ -672,6 +685,11 @@ export default function AutoCadEngineeringPanel({
                     <td style={{ padding: '8px' }}>Brick Masonry (200mm)</td>
                     <td style={{ padding: '8px' }}>{boqData.brickworkM3} m³</td>
                     <td style={{ padding: '8px', color: '#38BDF8' }}>₹{boqData.costBrickwork.toLocaleString()}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #334155' }}>
+                    <td style={{ padding: '8px' }}>R.C.C. Columns (M25 + Fe500)</td>
+                    <td style={{ padding: '8px' }}>{boqData.colConcM3} m³ ({boqData.colCount} Nos)</td>
+                    <td style={{ padding: '8px', color: '#38BDF8' }}>₹{boqData.costColumns.toLocaleString()}</td>
                   </tr>
                   <tr style={{ borderBottom: '1px solid #334155' }}>
                     <td style={{ padding: '8px' }}>Cement Plastering (1:4)</td>

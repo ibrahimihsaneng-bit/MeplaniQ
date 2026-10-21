@@ -1280,6 +1280,72 @@ export default function AutoCadCanvas({
               );
             }
 
+            if (ent.type === 'column' && ent.center) {
+              const colW = ent.width || 300;
+              const colH = ent.height || 300;
+              const halfW = colW / 2;
+              const halfH = colH / 2;
+              return (
+                <g key={entKey} className="cad-structural-column">
+                  <rect
+                    x={ent.center.x - halfW}
+                    y={ent.center.y - halfH}
+                    width={colW}
+                    height={colH}
+                    fill={isSelected ? "rgba(250, 204, 21, 0.4)" : "#1E293B"}
+                    stroke={isSelected ? "#FACC15" : "#38BDF8"}
+                    strokeWidth={2 / zoom}
+                  />
+                  <line
+                    x1={ent.center.x - halfW}
+                    y1={ent.center.y - halfH}
+                    x2={ent.center.x + halfW}
+                    y2={ent.center.y + halfH}
+                    stroke={isSelected ? "#FACC15" : "#0284C7"}
+                    strokeWidth={1.2 / zoom}
+                  />
+                  <line
+                    x1={ent.center.x - halfW}
+                    y1={ent.center.y + halfH}
+                    x2={ent.center.x + halfW}
+                    y2={ent.center.y - halfH}
+                    stroke={isSelected ? "#FACC15" : "#0284C7"}
+                    strokeWidth={1.2 / zoom}
+                  />
+                </g>
+              );
+            }
+
+            if (ent.type === 'gridline' && ent.p1 && ent.p2) {
+              const bubbleR = 240;
+              return (
+                <g key={entKey} className="cad-structural-gridline">
+                  <line
+                    x1={ent.p1.x}
+                    y1={ent.p1.y}
+                    x2={ent.p2.x}
+                    y2={ent.p2.y}
+                    stroke="#F87171"
+                    strokeWidth={1.2 / zoom}
+                    strokeDasharray="400 120 80 120"
+                    opacity={0.8}
+                  />
+                  <circle cx={ent.p1.x} cy={ent.p1.y} r={bubbleR} fill="#0A0E17" stroke="#EF4444" strokeWidth={1.5 / zoom} />
+                  <g transform={`translate(${ent.p1.x}, ${ent.p1.y}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                    <text x="0" y="4" textAnchor="middle" dominantBaseline="middle" fill="#F87171" fontSize="11" fontWeight="bold">
+                      {ent.label}
+                    </text>
+                  </g>
+                  <circle cx={ent.p2.x} cy={ent.p2.y} r={bubbleR} fill="#0A0E17" stroke="#EF4444" strokeWidth={1.5 / zoom} />
+                  <g transform={`translate(${ent.p2.x}, ${ent.p2.y}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                    <text x="0" y="4" textAnchor="middle" dominantBaseline="middle" fill="#F87171" fontSize="11" fontWeight="bold">
+                      {ent.label}
+                    </text>
+                  </g>
+                </g>
+              );
+            }
+
             if (ent.type === 'block') {
               return <g key={entKey}>{renderCadBlock(ent, isSelected, zoom)}</g>;
             }

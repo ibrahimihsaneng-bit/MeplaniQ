@@ -11,11 +11,14 @@ export const DEFAULT_LAYERS = [
   { id: 'A-WALL', name: 'A-WALL (Walls)', color: '#38BDF8', lineweight: 0.50, visible: true, locked: false },
   { id: 'A-DOOR', name: 'A-DOOR (Doors)', color: '#FACC15', lineweight: 0.25, visible: true, locked: false },
   { id: 'A-WIND', name: 'A-WIND (Windows)', color: '#34D399', lineweight: 0.25, visible: true, locked: false },
+  { id: 'S-COLS', name: 'S-COLS (Structural Columns)', color: '#38BDF8', lineweight: 0.50, visible: true, locked: false },
+  { id: 'S-GRID', name: 'S-GRID (Structural Axes)', color: '#F87171', lineweight: 0.25, visible: true, locked: false },
   { id: 'M-HVAC', name: 'M-HVAC (Mechanical)', color: '#FB923C', lineweight: 0.35, visible: true, locked: false },
   { id: 'P-PLUM', name: 'P-PLUM (Plumbing)', color: '#60A5FA', lineweight: 0.35, visible: true, locked: false },
   { id: 'E-ELEC', name: 'E-ELEC (Electrical)', color: '#F43F5E', lineweight: 0.35, visible: true, locked: false },
   { id: 'A-DIMS', name: 'A-DIMS (Dimensions)', color: '#94A3B8', lineweight: 0.18, visible: true, locked: false },
-  { id: 'A-TEXT', name: 'A-TEXT (Annotations)', color: '#E2E8F0', lineweight: 0.25, visible: true, locked: false }
+  { id: 'A-TEXT', name: 'A-TEXT (Annotations)', color: '#E2E8F0', lineweight: 0.25, visible: true, locked: false },
+  { id: 'A-ANNO', name: 'A-ANNO (Sheet & Title Block)', color: '#10B981', lineweight: 0.35, visible: true, locked: false }
 ];
 
 export function useCadDraftingStore(initialEntities = []) {

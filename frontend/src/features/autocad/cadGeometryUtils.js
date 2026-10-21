@@ -1349,3 +1349,134 @@ export function generateTitleBlockAndBorder(entities = [], projectName = "BIM RE
 
   return elements;
 }
+
+/**
+ * Automatically calculates structural column coordinates at wall corners & junctions,
+ * and sets up standard alphanumeric structural grid lines (A, B, C... / 1, 2, 3...) with
+ * centerlines, circular ID bubbles, and bays inter-column dimensions.
+ */
+export function generateStructuralGridAndColumns(entities = [], colSize = 300) {
+  const elements = [];
+  const timestamp = Date.now();
+
+  const walls = entities.filter(e => e.type === 'wall' && e.centerline);
+  if (walls.length === 0) return elements;
+
+  // 1. Gather raw wall corner points
+  const rawPoints = [];
+  walls.forEach(w => {
+    rawPoints.push({ x: w.centerline.p1.x, y: w.centerline.p1.y });
+    rawPoints.push({ x: w.centerline.p2.x, y: w.centerline.p2.y });
+  });
+
+  // 2. Cluster points within 250mm tolerance
+  const clusteredNodes = [];
+  rawPoints.forEach(pt => {
+    const existing = clusteredNodes.find(c => dist(c, pt) < 250);
+    if (!existing) {
+      clusteredNodes.push({ x: Math.round(pt.x), y: Math.round(pt.y) });
+    }
+  });
+
+  if (clusteredNodes.length === 0) return elements;
+
+  // 3. Generate Structural Column entities at each junction
+  clusteredNodes.forEach((node, idx) => {
+    elements.push({
+      id: `col-${idx}-${timestamp}`,
+      type: 'column',
+      center: { x: node.x, y: node.y },
+      width: colSize,
+      height: colSize,
+      layer: 'S-COLS',
+      isStructural: true
+    });
+  });
+
+  // 4. Cluster distinct X and Y coordinates for structural grid lines
+  const rawXs = clusteredNodes.map(n => n.x);
+  const rawYs = clusteredNodes.map(n => n.y);
+
+  const gridXs = [];
+  rawXs.forEach(x => {
+    const existing = gridXs.find(gx => Math.abs(gx - x) < 300);
+    if (existing === undefined) {
+      gridXs.push(x);
+    }
+  });
+  gridXs.sort((a, b) => a - b);
+
+  const gridYs = [];
+  rawYs.forEach(y => {
+    const existing = gridYs.find(gy => Math.abs(gy - y) < 300);
+    if (existing === undefined) {
+      gridYs.push(y);
+    }
+  });
+  gridYs.sort((a, b) => a - b);
+
+  const minX = Math.min(...gridXs);
+  const maxX = Math.max(...gridXs);
+  const minY = Math.min(...gridYs);
+  const maxY = Math.max(...gridYs);
+
+  const gridExtension = 1400;
+
+  // 5. Generate Vertical Grid Lines (1, 2, 3...)
+  gridXs.forEach((gx, idx) => {
+    const label = String(idx + 1);
+    elements.push({
+      id: `gridline-x-${idx}-${timestamp}`,
+      type: 'gridline',
+      p1: { x: gx, y: minY - gridExtension },
+      p2: { x: gx, y: maxY + gridExtension },
+      axis: 'X',
+      label,
+      layer: 'S-GRID',
+      isStructural: true
+    });
+
+    // Add inter-grid dimension strings along top
+    if (idx > 0) {
+      const prevX = gridXs[idx - 1];
+      elements.push({
+        id: `grid-dim-x-${idx}-${timestamp}`,
+        type: 'dimension',
+        p1: { x: prevX, y: maxY + gridExtension + 500 },
+        p2: { x: gx, y: maxY + gridExtension + 500 },
+        layer: 'A-DIMS',
+        isStructural: true
+      });
+    }
+  });
+
+  // 6. Generate Horizontal Grid Lines (A, B, C...)
+  gridYs.forEach((gy, idx) => {
+    const label = String.fromCharCode(65 + (idx % 26));
+    elements.push({
+      id: `gridline-y-${idx}-${timestamp}`,
+      type: 'gridline',
+      p1: { x: minX - gridExtension, y: gy },
+      p2: { x: maxX + gridExtension, y: gy },
+      axis: 'Y',
+      label,
+      layer: 'S-GRID',
+      isStructural: true
+    });
+
+    // Add inter-grid dimension strings along left
+    if (idx > 0) {
+      const prevY = gridYs[idx - 1];
+      elements.push({
+        id: `grid-dim-y-${idx}-${timestamp}`,
+        type: 'dimension',
+        p1: { x: minX - gridExtension - 500, y: prevY },
+        p2: { x: minX - gridExtension - 500, y: gy },
+        layer: 'A-DIMS',
+        isStructural: true
+      });
+    }
+  });
+
+  return elements;
+}
