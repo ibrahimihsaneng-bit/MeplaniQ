@@ -2952,11 +2952,11 @@ export default function Canvas({
                         opacity="0.8"
                       />
                     )}
-                    {len > 600 && (
+                    {len > 550 && (
                       <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
-                        <rect x="-65" y="-9" width="130" height="18" rx="3" fill="#0F172A" stroke={ductColor} strokeWidth="1" />
-                        <text x="0" y="3" textAnchor="middle" dominantBaseline="middle" fill="#FED7AA" fontSize="9" fontWeight="700">
-                          {duct.label || `${duct.width}x${duct.height}`}
+                        <rect x="-85" y="-10" width="170" height="20" rx="4" fill="#0F172A" stroke={ductColor} strokeWidth="1" />
+                        <text x="0" y="3.5" textAnchor="middle" dominantBaseline="middle" fill="#FED7AA" fontSize="8" fontWeight="700">
+                          {duct.label || `${duct.width}x${duct.height} (${duct.cfm || 200} CFM)`}
                         </text>
                       </g>
                     )}

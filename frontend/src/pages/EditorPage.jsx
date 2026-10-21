@@ -46,6 +46,7 @@ import ValidationDrawer from '../components/ValidationDrawer';
 import { generateProjectCoordinatedMep, convertSolveDataToCadEntities } from '../features/mep/projectMepEngine';
 import AutoMepModal from '../features/mep/AutoMepModal';
 import MepCalculationModal from '../features/mep/MepCalculationModal';
+import AutonomousSprintTimer from '../features/mep/AutonomousSprintTimer';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
 import AutoCadEngineeringPanel from '../features/autocad/AutoCadEngineeringPanel';
 import AutoCad3DViewport from '../features/autocad/AutoCad3DViewport';
@@ -2011,6 +2012,9 @@ export default function EditorPage() {
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: isDirty ? 'var(--status-warning)' : 'var(--status-success)' }}></span>
             <span>{isSaving ? 'Saving...' : isDirty ? 'Unsaved Changes' : 'Saved to Local DB'}</span>
           </div>
+
+          {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
+          <AutonomousSprintTimer currentCycle={3} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}

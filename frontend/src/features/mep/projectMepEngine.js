@@ -461,6 +461,7 @@ export function generateProjectCoordinatedMep(solveData, options = {}) {
   // Main Supply Trunk Duct (Galvanized Steel)
   const trunkDims = getDuctDimensions(totalCfm);
   const trunkEndX = Math.round(maxX - bWidth * 0.12);
+  const trunkAero = calculateDuctAerodynamics(trunkDims.width, trunkDims.height, totalCfm);
 
   hvacDucts.push({
     id: `duct-supply-trunk-${timestamp}`,
@@ -470,13 +471,17 @@ export function generateProjectCoordinatedMep(solveData, options = {}) {
     width: trunkDims.width,
     height: trunkDims.height,
     cfm: totalCfm,
-    label: `${trunkDims.width}x${trunkDims.height} MAIN SUPPLY DUCT (${totalCfm} CFM)`,
+    velocity_ms: trunkAero.velocityMs,
+    friction_loss_pa_m: trunkAero.frictionLossPaM,
+    dh_mm: trunkAero.dhMm,
+    label: `${trunkDims.width}x${trunkDims.height} MAIN SUPPLY (${totalCfm} CFM • ${trunkAero.velocityMs} m/s)`,
     layer: 'M-HVAC'
   });
 
   // Branch Ducts & 4-Way Ceiling Diffusers for each room
   conditionedRooms.forEach((rm, idx) => {
     const branchDims = getDuctDimensions(rm.cfm);
+    const branchAero = calculateDuctAerodynamics(branchDims.width, branchDims.height, rm.cfm);
     const diffuserId = `DIFFUSER-${idx + 1}-${timestamp}`;
 
     // Place 4-way diffuser at room center
@@ -502,7 +507,10 @@ export function generateProjectCoordinatedMep(solveData, options = {}) {
       width: branchDims.width,
       height: branchDims.height,
       cfm: rm.cfm,
-      label: `${branchDims.width}x${branchDims.height} (${rm.cfm} CFM)`,
+      velocity_ms: branchAero.velocityMs,
+      friction_loss_pa_m: branchAero.frictionLossPaM,
+      dh_mm: branchAero.dhMm,
+      label: `${branchDims.width}x${branchDims.height} (${rm.cfm} CFM • ${branchAero.velocityMs} m/s)`,
       layer: 'M-HVAC'
     });
   });
