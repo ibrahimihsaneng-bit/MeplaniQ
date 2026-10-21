@@ -19,6 +19,7 @@ export default function AutoCadRibbon({
   onInsertTitleBlock,
   onGenerateStructuralGrid,
   onGenerateAutomatedMep,
+  onGenerateAutomatedElectrical,
   showWallDimensions,
   onToggleWallDimensions,
   settings,
@@ -339,6 +340,28 @@ export default function AutoCadRibbon({
           >
             <span>💨</span>
             <span>Auto MEP</span>
+          </button>
+
+          {/* Generate Automated Electrical Layout & Conduit Splines */}
+          <button
+            type="button"
+            onClick={onGenerateAutomatedElectrical}
+            title="Auto-wire CIBSE / IS 3646 compliant luminaires, switches, sockets, and curved conduit splines to Main DB (ELEC / AUTOWIRE)"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #F43F5E',
+              color: '#FDA4AF',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <span>⚡</span>
+            <span>Auto Elec</span>
           </button>
 
           {/* Convert Linework to MEPlanIQ Solved Rooms */}

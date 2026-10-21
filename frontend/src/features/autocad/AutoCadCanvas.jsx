@@ -1485,6 +1485,85 @@ export default function AutoCadCanvas({
               );
             }
 
+            if (ent.type === 'elec-fixture' && ent.center) {
+              const fColor = isSelected ? '#FACC15' : '#F43F5E';
+              const cx = ent.center.x;
+              const cy = ent.center.y;
+
+              if (ent.subType === 'downlight') {
+                const r = 160;
+                return (
+                  <g key={entKey} className="cad-elec-downlight">
+                    <circle cx={cx} cy={cy} r={r} fill="#1E293B" stroke={fColor} strokeWidth={2 / zoom} />
+                    <circle cx={cx} cy={cy} r={r * 0.35} fill={fColor} />
+                    <line x1={cx - r - 40} y1={cy} x2={cx + r + 40} y2={cy} stroke={fColor} strokeWidth={1.2 / zoom} />
+                    <line x1={cx} y1={cy - r - 40} x2={cx} y2={cy + r + 40} stroke={fColor} strokeWidth={1.2 / zoom} />
+                  </g>
+                );
+              }
+
+              if (ent.subType === 'switch') {
+                const r = 140;
+                return (
+                  <g key={entKey} className="cad-elec-switch">
+                    <circle cx={cx} cy={cy} r={r} fill="#0F172A" stroke={fColor} strokeWidth={2 / zoom} />
+                    <line x1={cx} y1={cy} x2={cx + r + 80} y2={cy + r + 80} stroke={fColor} strokeWidth={2 / zoom} />
+                    <g transform={`translate(${cx}, ${cy}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <text x="0" y="3" textAnchor="middle" dominantBaseline="middle" fill="#FFFFFF" fontSize="9" fontWeight="bold">
+                        {ent.label || 'S'}
+                      </text>
+                    </g>
+                  </g>
+                );
+              }
+
+              if (ent.subType === 'receptacle') {
+                const r = 150;
+                return (
+                  <g key={entKey} className="cad-elec-receptacle">
+                    <path
+                      d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy} Z`}
+                      fill="#0F172A"
+                      stroke={fColor}
+                      strokeWidth={2 / zoom}
+                    />
+                    <line x1={cx - 50} y1={cy} x2={cx - 50} y2={cy + 80} stroke={fColor} strokeWidth={1.5 / zoom} />
+                    <line x1={cx + 50} y1={cy} x2={cx + 50} y2={cy + 80} stroke={fColor} strokeWidth={1.5 / zoom} />
+                    {ent.label && (
+                      <g transform={`translate(${cx}, ${cy - 80}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                        <text x="0" y="0" textAnchor="middle" fill="#FDE047" fontSize="8" fontWeight="bold">
+                          {ent.label}
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                );
+              }
+            }
+
+            if (ent.type === 'elec-conduit' && ent.pathD) {
+              const cColor = isSelected ? '#FACC15' : '#F43F5E';
+              return (
+                <g key={entKey} className="cad-elec-conduit">
+                  <path
+                    d={ent.pathD}
+                    fill="none"
+                    stroke={cColor}
+                    strokeWidth={1.8 / zoom}
+                    strokeDasharray="180 60"
+                    opacity={0.85}
+                  />
+                  {ent.label && ent.label.includes('⚡') && (
+                    <g transform={`translate(${(ent.center?.x || 0)}, ${(ent.center?.y || 0)}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <text x="0" y="0" textAnchor="middle" fill="#FDA4AF" fontSize="8" fontWeight="bold">
+                        {ent.label}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            }
+
             if (ent.type === 'block') {
               return <g key={entKey}>{renderCadBlock(ent, isSelected, zoom)}</g>;
             }

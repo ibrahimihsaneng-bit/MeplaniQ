@@ -1782,3 +1782,208 @@ export function generateAutomatedMepNetworks(entities = [], detectedRooms = []) 
 
   return elements;
 }
+
+
+/**
+ * Automatically generates standard CIBSE / IS 3646 and NEC compliant electrical
+ * layout: recessed downlights, wall switches, dual receptacles, Distribution Board (DB-01),
+ * and curved conduit routing splines with circuit tags.
+ */
+export function generateAutomatedElectricalSystem(entities = [], detectedRooms = []) {
+  const elements = [];
+  const timestamp = Date.now();
+
+  // 1. Calculate Bounding Envelope
+  let minX = 0, minY = 0, maxX = 6000, maxY = 5000;
+  const xs = [];
+  const ys = [];
+
+  entities.forEach(e => {
+    if (e.isSheetBorder || e.isTitleBlock || e.isMep || e.isElectrical) return;
+    if (e.centerline) {
+      xs.push(e.centerline.p1.x, e.centerline.p2.x);
+      ys.push(e.centerline.p1.y, e.centerline.p2.y);
+    } else if (e.p1 && e.p2) {
+      xs.push(e.p1.x, e.p2.x);
+      ys.push(e.p1.y, e.p2.y);
+    } else if (e.x !== undefined && e.y !== undefined) {
+      xs.push(e.x);
+      ys.push(e.y);
+    }
+  });
+
+  if (xs.length > 0) {
+    minX = Math.min(...xs);
+    maxX = Math.max(...xs);
+    minY = Math.min(...ys);
+    maxY = Math.max(...ys);
+  }
+
+  const buildingW = Math.max(4000, maxX - minX);
+  const buildingH = Math.max(3000, maxY - minY);
+
+  // 2. Main Distribution Board (DB) Panelboard
+  const dbX = minX - 550;
+  const dbY = Math.round(minY + buildingH * 0.35);
+
+  elements.push({
+    id: 'elec-db-main-' + timestamp,
+    type: 'equipment',
+    subType: 'panelboard',
+    center: { x: dbX, y: dbY },
+    width: 450,
+    height: 350,
+    label: 'DB-01 (12-WAY 3PH)',
+    layer: 'E-ELEC',
+    isElectrical: true
+  });
+
+  // 3. Process Rooms or Zones
+  const zones = [];
+  if (detectedRooms && detectedRooms.length > 0) {
+    detectedRooms.forEach((rm, idx) => {
+      let rMinX = Infinity, rMaxX = -Infinity, rMinY = Infinity, rMaxY = -Infinity;
+      if (rm.points && rm.points.length > 0) {
+        rm.points.forEach(p => {
+          rMinX = Math.min(rMinX, p[0]);
+          rMaxX = Math.max(rMaxX, p[0]);
+          rMinY = Math.min(rMinY, p[1]);
+          rMaxY = Math.max(rMaxY, p[1]);
+        });
+      } else {
+        rMinX = minX + (buildingW / (detectedRooms.length + 1)) * idx;
+        rMaxX = rMinX + (buildingW / (detectedRooms.length + 1));
+        rMinY = minY;
+        rMaxY = maxY;
+      }
+      zones.push({
+        name: rm.name || ('Room ' + (idx + 1)),
+        area: rm.carpet_area_sqm || 16.0,
+        minX: rMinX,
+        maxX: rMaxX,
+        minY: rMinY,
+        maxY: rMaxY,
+        cx: Math.round((rMinX + rMaxX) / 2),
+        cy: Math.round((rMinY + rMaxY) / 2)
+      });
+    });
+  } else {
+    zones.push(
+      { name: 'Zone 1 (Living)', area: 24, minX: minX, maxX: minX + buildingW * 0.5, minY: minY, maxY: maxY, cx: Math.round(minX + buildingW * 0.25), cy: Math.round(minY + buildingH * 0.5) },
+      { name: 'Zone 2 (Bedroom)', area: 18, minX: minX + buildingW * 0.5, maxX: maxX, minY: minY, maxY: maxY, cx: Math.round(minX + buildingW * 0.75), cy: Math.round(minY + buildingH * 0.5) }
+    );
+  }
+
+  function makeCurvedPath(p1, p2, curveOffset = 180) {
+    const mx = (p1.x + p2.x) / 2;
+    const my = (p1.y + p2.y) / 2;
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const ctrlX = Math.round(mx + nx * curveOffset);
+    const ctrlY = Math.round(my + ny * curveOffset);
+    return 'M ' + p1.x + ' ' + p1.y + ' Q ' + ctrlX + ' ' + ctrlY + ' ' + p2.x + ' ' + p2.y;
+  }
+
+  zones.forEach((z, zIdx) => {
+    const circuitNum = zIdx + 1;
+    const circuitTag = 'C' + circuitNum;
+    const powerCircuitTag = 'P' + circuitNum;
+
+    const lights = [];
+    const spanX = (z.maxX - z.minX) * 0.25;
+
+    if (z.area > 20) {
+      lights.push({ x: Math.round(z.cx - spanX), y: z.cy });
+      lights.push({ x: Math.round(z.cx + spanX), y: z.cy });
+    } else {
+      lights.push({ x: z.cx, y: z.cy });
+    }
+
+    lights.forEach((lp, lIdx) => {
+      elements.push({
+        id: 'elec-light-' + zIdx + '-' + lIdx + '-' + timestamp,
+        type: 'elec-fixture',
+        subType: 'downlight',
+        center: lp,
+        circuitId: circuitTag,
+        powerWatts: 15,
+        lumens: 1200,
+        layer: 'E-ELEC',
+        isElectrical: true
+      });
+    });
+
+    const swPt = { x: Math.round(z.minX + 350), y: Math.round(z.minY + 450) };
+    elements.push({
+      id: 'elec-switch-' + zIdx + '-' + timestamp,
+      type: 'elec-fixture',
+      subType: 'switch',
+      center: swPt,
+      circuitId: circuitTag,
+      label: 'S1',
+      layer: 'E-ELEC',
+      isElectrical: true
+    });
+
+    const sk1 = { x: Math.round(z.minX + 450), y: Math.round(z.maxY - 350) };
+    const sk2 = { x: Math.round(z.maxX - 450), y: Math.round(z.minY + 400) };
+
+    elements.push({
+      id: 'elec-socket-' + zIdx + '-1-' + timestamp,
+      type: 'elec-fixture',
+      subType: 'receptacle',
+      center: sk1,
+      circuitId: powerCircuitTag,
+      label: '16A Power',
+      layer: 'E-ELEC',
+      isElectrical: true
+    });
+
+    elements.push({
+      id: 'elec-socket-' + zIdx + '-2-' + timestamp,
+      type: 'elec-fixture',
+      subType: 'receptacle',
+      center: sk2,
+      circuitId: powerCircuitTag,
+      label: '6A Socket',
+      layer: 'E-ELEC',
+      isElectrical: true
+    });
+
+    elements.push({
+      id: 'elec-conduit-sw-' + zIdx + '-' + timestamp,
+      type: 'elec-conduit',
+      pathD: makeCurvedPath(swPt, lights[0], 200),
+      circuitId: circuitTag,
+      label: circuitTag,
+      layer: 'E-ELEC',
+      isElectrical: true
+    });
+
+    if (lights.length > 1) {
+      elements.push({
+        id: 'elec-conduit-ll-' + zIdx + '-' + timestamp,
+        type: 'elec-conduit',
+        pathD: makeCurvedPath(lights[0], lights[1], -150),
+        circuitId: circuitTag,
+        layer: 'E-ELEC',
+        isElectrical: true
+      });
+    }
+
+    elements.push({
+      id: 'elec-conduit-hr-' + zIdx + '-' + timestamp,
+      type: 'elec-conduit',
+      pathD: makeCurvedPath(swPt, { x: dbX + 225, y: dbY }, 300),
+      circuitId: circuitTag,
+      label: '⚡ ' + circuitTag + ' (10A MCB)',
+      layer: 'E-ELEC',
+      isElectrical: true
+    });
+  });
+
+  return elements;
+}

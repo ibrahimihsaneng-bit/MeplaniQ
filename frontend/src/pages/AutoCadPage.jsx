@@ -20,7 +20,8 @@ import {
   generateScheduleTable,
   generateTitleBlockAndBorder,
   generateStructuralGridAndColumns,
-  generateAutomatedMepNetworks
+  generateAutomatedMepNetworks,
+  generateAutomatedElectricalSystem
 } from '../features/autocad/cadGeometryUtils';
 import { fetchProjectById, updateProjectById, createManualProject, solveCadGeometry, exportDxf } from '../api';
 import Toast from '../Toast';
@@ -301,6 +302,22 @@ export default function AutoCadPage() {
       showToast(`Generated ${ductCount} ducts & ${pipeCount} plumbing lines!`, "success");
     } else {
       showToast("No walls found to route MEP systems", "info");
+    }
+  }, [entities, detectedRooms, setEntities, appendHistory, showToast]);
+
+  const handleGenerateAutomatedElectrical = useCallback(() => {
+    const elecElements = generateAutomatedElectricalSystem(entities, detectedRooms);
+    if (elecElements.length > 0) {
+      // Filter out any previous electrical elements if re-running
+      const cleanEntities = entities.filter(e => !e.isElectrical);
+      setEntities([...cleanEntities, ...elecElements]);
+      const lightCount = elecElements.filter(e => e.type === 'elec-fixture' && e.subType === 'downlight').length;
+      const socketCount = elecElements.filter(e => e.type === 'elec-fixture' && e.subType === 'receptacle').length;
+      const conduitCount = elecElements.filter(e => e.type === 'elec-conduit').length;
+      appendHistory(`ELEC: Auto-wired ${lightCount} luminaires, ${socketCount} receptacles, and ${conduitCount} conduit splines to Main DB-01.`);
+      showToast(`Wired ${lightCount} luminaires & ${conduitCount} conduit circuits!`, "success");
+    } else {
+      showToast("No architectural envelope found to wire electrical circuits", "info");
     }
   }, [entities, detectedRooms, setEntities, appendHistory, showToast]);
 
@@ -594,6 +611,14 @@ export default function AutoCadPage() {
         handleGenerateAutomatedMep();
         break;
 
+      case 'ELEC':
+      case 'ELECTRICAL':
+      case 'AUTOWIRE':
+      case 'WIRING':
+      case 'LIGHTING':
+        handleGenerateAutomatedElectrical();
+        break;
+
       case 'U':
       case 'UNDO':
         if (undo()) appendHistory("UNDO");
@@ -622,7 +647,7 @@ export default function AutoCadPage() {
         appendHistory(`Unknown command "${cleanCmd}". Type WALL, DOOR, WINDOW, FILLET, LINE, REC, DIM, or BLK.`, 'error');
         break;
     }
-  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, handleInsertTitleBlock, handleGenerateStructuralGrid, handleGenerateAutomatedMep, appendHistory]);
+  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, handleInsertTitleBlock, handleGenerateStructuralGrid, handleGenerateAutomatedMep, handleGenerateAutomatedElectrical, appendHistory]);
 
   // Coordinate Input Handler
   const handleCoordinateSubmit = useCallback((coordStr) => {
@@ -832,6 +857,7 @@ export default function AutoCadPage() {
         onInsertTitleBlock={handleInsertTitleBlock}
         onGenerateStructuralGrid={handleGenerateStructuralGrid}
         onGenerateAutomatedMep={handleGenerateAutomatedMep}
+        onGenerateAutomatedElectrical={handleGenerateAutomatedElectrical}
         settings={settings}
         onUpdateSetting={updateSetting}
         canUndo={canUndo}
