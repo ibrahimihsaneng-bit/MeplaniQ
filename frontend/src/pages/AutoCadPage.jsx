@@ -9,6 +9,7 @@ import AutoCadPropertiesPanel from '../features/autocad/AutoCadPropertiesPanel';
 import AutoCadBlockLibrary from '../features/autocad/AutoCadBlockLibrary';
 import AutoCadEngineeringPanel from '../features/autocad/AutoCadEngineeringPanel';
 import AutoCad3DViewport from '../features/autocad/AutoCad3DViewport';
+import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
 import { useCadDraftingStore } from '../features/autocad/useCadDraftingStore';
 import {
   extractRoomsFromLinework,
@@ -22,7 +23,9 @@ import {
   generateTitleBlockAndBorder,
   generateStructuralGridAndColumns,
   generateAutomatedMepNetworks,
-  generateAutomatedElectricalSystem
+  generateAutomatedElectricalSystem,
+  runMultiDisciplineClashDetection,
+  generateMasterSubmissionAudit
 } from '../features/autocad/cadGeometryUtils';
 import { fetchProjectById, updateProjectById, createManualProject, solveCadGeometry, exportDxf } from '../api';
 import Toast from '../Toast';
@@ -79,6 +82,8 @@ export default function AutoCadPage() {
   const [showWallDimensions, setShowWallDimensions] = useState(true);
   const [showThermalHeatmap, setShowThermalHeatmap] = useState(false);
   const [is3DViewActive, setIs3DViewActive] = useState(false);
+  const [clashData, setClashData] = useState(null);
+  const [isClashDrawerOpen, setIsClashDrawerOpen] = useState(false);
   const [activeBlockToPlace, setActiveBlockToPlace] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
   const [isConverting, setIsConverting] = useState(false);
@@ -322,6 +327,40 @@ export default function AutoCadPage() {
       showToast("No architectural envelope found to wire electrical circuits", "info");
     }
   }, [entities, detectedRooms, setEntities, appendHistory, showToast]);
+
+  const handleRunClashDetection = useCallback(() => {
+    appendHistory("Running multi-discipline BIM clash detection...", "info");
+    const report = runMultiDisciplineClashDetection(entities, detectedRooms);
+    setClashData(report);
+    setIsClashDrawerOpen(true);
+
+    const cleanEntities = entities.filter(e => e.type !== 'clash-marker');
+    if (report.clashes.length > 0) {
+      setEntities([...cleanEntities, ...report.clashes]);
+      appendHistory(`CLASH: Identified ${report.summary.total} conflict(s) (${report.summary.hard} Hard, ${report.summary.clearance} Clearance).`, "error");
+      showToast(`Clash Detection: ${report.summary.total} issues flagged`, "warning");
+    } else {
+      setEntities(cleanEntities);
+      appendHistory("CLASH: 0 conflicts detected. All models coordinated!", "info");
+      showToast("Zero spatial clashes! Fully coordinated BIM model.", "success");
+    }
+  }, [entities, detectedRooms, setEntities, appendHistory, showToast]);
+
+  const handleGenerateMasterAudit = useCallback(() => {
+    const audit = generateMasterSubmissionAudit(entities, detectedRooms, projectName || "PhD BIM Dissertation Project");
+    const jsonStr = JSON.stringify(audit, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(projectName || 'MEPlanIQ_BIM').replace(/\s+/g, '_')}_Master_Audit_Dossier.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    appendHistory("AUDIT: Exported PhD Dissertation-Grade Master BIM Certification Dossier (.JSON).", "info");
+    showToast("Master Audit Dossier exported successfully!", "success");
+  }, [entities, detectedRooms, projectName, appendHistory, showToast]);
 
   const handleFlipDoorSwing = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -636,6 +675,18 @@ export default function AutoCadPage() {
         handleGenerateAutomatedElectrical();
         break;
 
+      case 'CLASH':
+      case 'INTERFERENCE':
+      case 'CLEARANCE':
+        handleRunClashDetection();
+        break;
+
+      case 'AUDIT':
+      case 'SUBMIT':
+      case 'DOSSIER':
+        handleGenerateMasterAudit();
+        break;
+
       case 'U':
       case 'UNDO':
         if (undo()) appendHistory("UNDO");
@@ -664,7 +715,7 @@ export default function AutoCadPage() {
         appendHistory(`Unknown command "${cleanCmd}". Type WALL, DOOR, WINDOW, FILLET, LINE, REC, DIM, or BLK.`, 'error');
         break;
     }
-  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, handleInsertTitleBlock, handleGenerateStructuralGrid, handleGenerateAutomatedMep, handleGenerateAutomatedElectrical, appendHistory]);
+  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, handleInsertTitleBlock, handleGenerateStructuralGrid, handleGenerateAutomatedMep, handleGenerateAutomatedElectrical, handleRunClashDetection, handleGenerateMasterAudit, appendHistory]);
 
   // Coordinate Input Handler
   const handleCoordinateSubmit = useCallback((coordStr) => {
@@ -877,6 +928,8 @@ export default function AutoCadPage() {
         onGenerateStructuralGrid={handleGenerateStructuralGrid}
         onGenerateAutomatedMep={handleGenerateAutomatedMep}
         onGenerateAutomatedElectrical={handleGenerateAutomatedElectrical}
+        onRunClashDetection={handleRunClashDetection}
+        onGenerateMasterAudit={handleGenerateMasterAudit}
         settings={settings}
         onUpdateSetting={updateSetting}
         canUndo={canUndo}
@@ -1027,6 +1080,19 @@ export default function AutoCadPage() {
             entities={entities}
             detectedRooms={detectedRooms}
             onClose={() => setIsEngineeringPanelOpen(false)}
+          />
+        )}
+
+        {/* Multi-Discipline BIM Clash Detection Drawer (Right) */}
+        {isClashDrawerOpen && clashData && (
+          <AutoCadClashDrawer
+            clashData={clashData}
+            onClose={() => setIsClashDrawerOpen(false)}
+            onDownloadAuditReport={handleGenerateMasterAudit}
+            onHighlightClash={(pt) => {
+              appendHistory(`Zoomed to clash at (${Math.round(pt.x)}, ${Math.round(pt.y)})`);
+              showToast(`Inspecting clash at (${Math.round(pt.x)}, ${Math.round(pt.y)})`, "info");
+            }}
           />
         )}
 

@@ -1564,6 +1564,24 @@ export default function AutoCadCanvas({
               );
             }
 
+            if (ent.type === 'clash-marker' && ent.center) {
+              const isHard = ent.severity === 'HARD';
+              const markerColor = isHard ? '#EF4444' : '#F59E0B';
+              const r = 240;
+              return (
+                <g key={entKey} className="cad-clash-marker">
+                  <circle cx={ent.center.x} cy={ent.center.y} r={r} fill={isHard ? "rgba(239, 68, 68, 0.25)" : "rgba(245, 158, 11, 0.25)"} stroke={markerColor} strokeWidth={2 / zoom} strokeDasharray="120 60" />
+                  <circle cx={ent.center.x} cy={ent.center.y} r={r * 0.4} fill={markerColor} />
+                  <g transform={`translate(${ent.center.x}, ${ent.center.y - r - 80}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                    <rect x="-40" y="-10" width="80" height="20" rx="4" fill="#0A0E17" stroke={markerColor} strokeWidth="1" />
+                    <text x="0" y="4" textAnchor="middle" dominantBaseline="middle" fill="#FFFFFF" fontSize="9" fontWeight="800">
+                      ⚠️ {ent.severity}
+                    </text>
+                  </g>
+                </g>
+              );
+            }
+
             if (ent.type === 'block') {
               return <g key={entKey}>{renderCadBlock(ent, isSelected, zoom)}</g>;
             }

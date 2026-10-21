@@ -22,6 +22,8 @@ export default function AutoCadRibbon({
   onGenerateStructuralGrid,
   onGenerateAutomatedMep,
   onGenerateAutomatedElectrical,
+  onRunClashDetection,
+  onGenerateMasterAudit,
   showWallDimensions,
   onToggleWallDimensions,
   settings,
@@ -386,6 +388,50 @@ export default function AutoCadRibbon({
           >
             <span>⚡</span>
             <span>Auto Elec</span>
+          </button>
+
+          {/* Multi-Discipline BIM Clash Detection Engine */}
+          <button
+            type="button"
+            onClick={onRunClashDetection}
+            title="Run Multi-Discipline BIM Clash Detection Matrix across Architecture, Structure & MEP (CLASH)"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #EF4444',
+              color: '#FCA5A5',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <span>⚠️</span>
+            <span>Clash Detect</span>
+          </button>
+
+          {/* Master Audit & Formal Submission Package */}
+          <button
+            type="button"
+            onClick={onGenerateMasterAudit}
+            title="Generate PhD Dissertation Grade Comprehensive Engineering Audit Dossier (.JSON / .CSV) (AUDIT)"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #A855F7',
+              color: '#D8B4FE',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <span>🎓</span>
+            <span>Master Audit</span>
           </button>
 
           {/* Convert Linework to MEPlanIQ Solved Rooms */}
