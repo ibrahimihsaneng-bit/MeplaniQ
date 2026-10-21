@@ -109,6 +109,279 @@ export function calculateRoomCoolingAndCfm(roomType, areaSqm) {
 /**
  * Returns duct cross section (W x H in mm) based on CFM flow.
  */
+
+/**
+ * Calculates duct velocity (m/s) and friction pressure drop (Pa/m) per ASHRAE Fundamentals.
+ */
+export function calculateDuctAerodynamics(widthMm, heightMm, cfm) {
+  const areaM2 = (widthMm * heightMm) / 1_000_000.0;
+  const flowM3s = cfm * 0.000471947;
+  const velocityMs = areaM2 > 0 ? (flowM3s / areaM2) : 0;
+  const dhMm = (widthMm + heightMm) > 0 ? (2 * widthMm * heightMm) / (widthMm + heightMm) : 200;
+  // ASHRAE friction loss approximation (Pa per meter)
+  const frictionLossPaM = dhMm > 0 ? ((0.00226 * Math.pow(velocityMs, 1.852)) / Math.pow(dhMm / 1000.0, 1.269)) : 0.8;
+  const velocityPressurePa = 0.5 * 1.204 * Math.pow(velocityMs, 2);
+
+  return {
+    velocityMs: parseFloat(velocityMs.toFixed(2)),
+    frictionLossPaM: parseFloat(frictionLossPaM.toFixed(2)),
+    velocityPressurePa: parseFloat(velocityPressurePa.toFixed(1)),
+    dhMm: Math.round(dhMm)
+  };
+}
+
+/**
+ * Calculates 3-Phase Electrical Load Balancing Schedule for DB-01.
+ */
+export function calculate3PhaseLoadBalance(circuits = [], components = []) {
+  const phases = {
+    R: { name: 'Phase R (Red)', loadW: 0, circuits: [] },
+    Y: { name: 'Phase Y (Yellow)', loadW: 0, circuits: [] },
+    B: { name: 'Phase B (Blue)', loadW: 0, circuits: [] }
+  };
+
+  const compMap = {};
+  components.forEach(c => { if (c.id) compMap[c.id] = c; });
+
+  const phaseKeys = ['R', 'Y', 'B'];
+  circuits.forEach((ckt, idx) => {
+    // Round-robin phase assignment for equal load distribution
+    const pKey = phaseKeys[idx % 3];
+    let loadW = 0;
+    (ckt.connected_component_ids || []).forEach(cid => {
+      if (compMap[cid]) loadW += Number(compMap[cid].wattage) || 0;
+    });
+    if (loadW === 0) loadW = Number(ckt.total_load_w) || (ckt.category === 'lighting' ? 240 : 1200);
+
+    const currentA = parseFloat((loadW / (230.0 * 0.85)).toFixed(2));
+    const breakerA = currentA <= 8 ? 10 : (currentA <= 14 ? 16 : (currentA <= 18 ? 20 : (currentA <= 22 ? 25 : 32)));
+
+    const cktDetail = {
+      id: ckt.id || `CKT-${idx + 1}`,
+      name: ckt.name || `Circuit ${idx + 1}`,
+      phase: pKey,
+      category: ckt.category || 'lighting',
+      loadW,
+      currentA,
+      breakerA,
+      wireGauge: ckt.wire_gauge_sqmm || (breakerA <= 10 ? 1.5 : (breakerA <= 16 ? 2.5 : 4.0))
+    };
+
+    phases[pKey].loadW += loadW;
+    phases[pKey].circuits.push(cktDetail);
+  });
+
+  const totalConnectedKw = parseFloat(((phases.R.loadW + phases.Y.loadW + phases.B.loadW) / 1000.0).toFixed(2));
+  const diversityFactor = 0.75;
+  const maxDemandKva = parseFloat(((totalConnectedKw * diversityFactor) / 0.85).toFixed(2));
+
+  // Phase unbalance percentage
+  const avgLoad = (phases.R.loadW + phases.Y.loadW + phases.B.loadW) / 3.0;
+  const maxDev = Math.max(
+    Math.abs(phases.R.loadW - avgLoad),
+    Math.abs(phases.Y.loadW - avgLoad),
+    Math.abs(phases.B.loadW - avgLoad)
+  );
+  const unbalancePercent = avgLoad > 0 ? parseFloat(((maxDev / avgLoad) * 100).toFixed(1)) : 0;
+
+  return {
+    phases,
+    totalConnectedKw,
+    diversityFactor,
+    maxDemandKva,
+    unbalancePercent,
+    status: unbalancePercent <= 15 ? 'BALANCED' : 'OPTIMAL_REALLOCATION_SUGGESTED'
+  };
+}
+
+
+/**
+ * Calculates Plumbing Hydraulics & Sizing per Uniform Plumbing Code (UPC / IPC)
+ * & Hunter's Curve peak fixture unit demand.
+ */
+export function calculatePlumbingHydraulics(fixtures = [], pipes = []) {
+  let totalWsfu = 0;
+  let totalDfu = 0;
+  const fixtureCounts = { wc: 0, basin: 0, shower: 0, sink: 0, other: 0 };
+
+  fixtures.forEach(fix => {
+    const t = String(fix.type || fix.name || '').toLowerCase();
+    if (t.includes('closet') || t.includes('wc')) {
+      totalWsfu += 2.5;
+      totalDfu += 3.0;
+      fixtureCounts.wc += 1;
+    } else if (t.includes('basin') || t.includes('wash')) {
+      totalWsfu += 1.0;
+      totalDfu += 1.0;
+      fixtureCounts.basin += 1;
+    } else if (t.includes('shower')) {
+      totalWsfu += 2.0;
+      totalDfu += 2.0;
+      fixtureCounts.shower += 1;
+    } else if (t.includes('sink')) {
+      totalWsfu += 1.5;
+      totalDfu += 2.0;
+      fixtureCounts.sink += 1;
+    } else {
+      totalWsfu += 1.5;
+      totalDfu += 1.5;
+      fixtureCounts.other += 1;
+    }
+  });
+
+  // Hunter's Curve flow estimate in Liters Per Minute (LPM)
+  const peakFlowLpm = totalWsfu > 0 ? parseFloat((15.0 * Math.sqrt(totalWsfu)).toFixed(1)) : 0;
+  const peakFlowGpm = parseFloat((peakFlowLpm * 0.264172).toFixed(1));
+
+  // Main DCW pipe sizing
+  const dcwMainPipe = (pipes || []).find(p => p.system_type === 'DCW' && p.diameter_mm >= 25);
+  const dcwDiameterMm = dcwMainPipe ? dcwMainPipe.diameter_mm : 32;
+  const areaM2 = (Math.PI * Math.pow(dcwDiameterMm / 1000.0, 2)) / 4.0;
+  const flowM3s = (peakFlowLpm / 60000.0);
+  const velocityMs = areaM2 > 0 ? parseFloat((flowM3s / areaM2).toFixed(2)) : 0;
+
+  // Hazen-Williams Head Loss (kPa per meter) for CPVC/PPR (C = 140)
+  // hf = 10.67 * L * Q^1.852 / (C^1.852 * D^4.87)
+  const cFactor = 140.0;
+  const headLossKpaM = (dcwDiameterMm > 0 && peakFlowLpm > 0)
+    ? parseFloat(((10.67 * Math.pow(flowM3s, 1.852)) / (Math.pow(cFactor, 1.852) * Math.pow(dcwDiameterMm / 1000.0, 4.87)) * 9.80665).toFixed(3))
+    : 0.12;
+
+  // Total pipe lengths
+  let totalDcwLengthM = 0;
+  let totalSoilLengthM = 0;
+  pipes.forEach(p => {
+    const lenM = (p.total_length_mm || 0) / 1000.0;
+    if (p.system_type === 'DCW') totalDcwLengthM += lenM;
+    else if (p.system_type === 'SOIL') totalSoilLengthM += lenM;
+  });
+
+  const totalPressureLossKpa = parseFloat((headLossKpaM * Math.max(1, totalDcwLengthM)).toFixed(1));
+
+  return {
+    fixtureCounts,
+    totalWsfu: parseFloat(totalWsfu.toFixed(1)),
+    totalDfu: parseFloat(totalDfu.toFixed(1)),
+    peakFlowLpm,
+    peakFlowGpm,
+    dcwDiameterMm,
+    velocityMs,
+    headLossKpaM,
+    totalDcwLengthM: parseFloat(totalDcwLengthM.toFixed(1)),
+    totalSoilLengthM: parseFloat(totalSoilLengthM.toFixed(1)),
+    totalPressureLossKpa,
+    velocityStatus: velocityMs <= 2.0 ? 'OPTIMAL' : 'HIGH_VELOCITY_WARNING',
+    soilStackRecommendation: 'Ø110 uPVC Gravity Soil Stack with 1:40 (2.5%) Gradient'
+  };
+}
+
+/**
+ * Calculates Comprehensive Engineering Bill of Quantities (BOQ) & Embodied Carbon Footprint.
+ */
+export function calculateBillOfQuantities(solveData = {}) {
+  const ducts = solveData.hvac_ducts || [];
+  const diffusers = solveData.hvac_diffusers || [];
+  const grilles = solveData.hvac_return_grilles || [];
+  const circuits = solveData.circuits || [];
+  const components = solveData.placed_components || [];
+  const pipes = solveData.plumbing_pipes || [];
+  const fixtures = solveData.plumbing_fixtures || [];
+  const columns = solveData.structural_columns || [];
+
+  // 1. HVAC Ductwork
+  let totalDuctAreaM2 = 0;
+  let totalDuctWeightKg = 0;
+  ducts.forEach(d => {
+    const wM = (d.width_mm || 300) / 1000.0;
+    const hM = (d.height_mm || 200) / 1000.0;
+    const perimeterM = 2 * (wM + hM);
+    const p1 = d.start_point || [0, 0];
+    const p2 = d.end_point || [0, 0];
+    const lenM = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 1000.0;
+    const surfaceArea = perimeterM * lenM;
+    totalDuctAreaM2 += surfaceArea;
+  });
+  // 22-gauge GI sheet: ~6.5 kg per m2
+  totalDuctWeightKg = parseFloat((totalDuctAreaM2 * 6.5).toFixed(1));
+  totalDuctAreaM2 = parseFloat(totalDuctAreaM2.toFixed(1));
+
+  // 2. Electrical Wiring & Conduits
+  let totalWireM = 0;
+  let totalConduitM = 0;
+  circuits.forEach(c => {
+    const pts = c.routed_path_points || [];
+    let cLenM = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      cLenM += Math.hypot(pts[i+1][0] - pts[i][0], pts[i+1][1] - pts[i][1]) / 1000.0;
+    }
+    if (cLenM === 0) cLenM = 15; // default circuit run
+    totalConduitM += cLenM;
+    // 3 wires per single-phase circuit (Phase + Neutral + Earth)
+    totalWireM += cLenM * 3;
+  });
+  totalWireM = parseFloat(totalWireM.toFixed(1));
+  totalConduitM = parseFloat(totalConduitM.toFixed(1));
+
+  // 3. Plumbing Pipes
+  let totalWaterPipeM = 0;
+  let totalDrainPipeM = 0;
+  pipes.forEach(p => {
+    const lenM = (p.total_length_mm || 0) / 1000.0;
+    if (p.system_type === 'DCW') totalWaterPipeM += lenM;
+    else totalDrainPipeM += lenM;
+  });
+  totalWaterPipeM = parseFloat(totalWaterPipeM.toFixed(1));
+  totalDrainPipeM = parseFloat(totalDrainPipeM.toFixed(1));
+
+  // 4. Structural Concrete & Steel
+  // Columns: typical height 3.0m, 300x300mm = 0.27 m3 each
+  const totalConcreteM3 = parseFloat((columns.length * 0.3 * 0.3 * 3.0).toFixed(2));
+  // 1% steel by volume in columns: ~78.5 kg per m3 concrete
+  const totalRebarKg = parseFloat((totalConcreteM3 * 78.5).toFixed(1));
+
+  // 5. Embodied Carbon Footprint (kg CO2e)
+  // GI Sheet: 2.8 kg CO2e / kg
+  // Copper Wire: 3.5 kg CO2e / kg (approx 0.08 kg/m)
+  // Concrete: 240 kg CO2e / m3
+  // Steel Rebar: 1.8 kg CO2e / kg
+  const ductCarbon = totalDuctWeightKg * 2.8;
+  const wireCarbon = (totalWireM * 0.08) * 3.5;
+  const concreteCarbon = totalConcreteM3 * 240.0;
+  const rebarCarbon = totalRebarKg * 1.8;
+  const totalEmbodiedCarbonKg = parseFloat((ductCarbon + wireCarbon + concreteCarbon + rebarCarbon).toFixed(1));
+
+  return {
+    hvac: {
+      ductAreaM2: totalDuctAreaM2,
+      ductWeightKg: totalDuctWeightKg,
+      diffusersCount: diffusers.length,
+      grillesCount: grilles.length,
+      ahuCount: (solveData.hvac_equipment || []).length || 1
+    },
+    electrical: {
+      wireLengthM: totalWireM,
+      conduitLengthM: totalConduitM,
+      distributionBoardsCount: 1,
+      switchesAndSocketsCount: components.length,
+      circuitsCount: circuits.length
+    },
+    plumbing: {
+      waterPipeLengthM: totalWaterPipeM,
+      drainPipeLengthM: totalDrainPipeM,
+      fixturesCount: fixtures.length
+    },
+    structural: {
+      columnsCount: columns.length,
+      concreteVolumeM3: totalConcreteM3,
+      rebarWeightKg: totalRebarKg
+    },
+    sustainability: {
+      totalEmbodiedCarbonKg,
+      rating: totalEmbodiedCarbonKg < 2500 ? 'A+ (High Efficiency / Low Carbon)' : 'A (Standard Green Building)'
+    }
+  };
+}
+
 export function getDuctDimensions(cfm) {
   if (cfm >= 1000) return { width: 550, height: 400 };
   if (cfm >= 700) return { width: 450, height: 300 };

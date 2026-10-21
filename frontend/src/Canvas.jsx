@@ -2912,6 +2912,21 @@ export default function Canvas({
                 const isTrunk = duct.system === 'SUPPLY';
                 const ductColor = isTrunk ? '#F97316' : '#FB923C';
 
+                // Aerodynamic Airflow Direction Indicator Chevron (SMACNA Standard)
+                const ux = dx / len;
+                const uy = dy / len;
+                const arrowDist = Math.min(len * 0.75, Math.max(len * 0.25, len / 2));
+                const ax = p1[0] + ux * arrowDist;
+                const ay = p1[1] + uy * arrowDist;
+                const aLen = Math.min(120, len * 0.25);
+                const aWidth = Math.min(halfW * 0.6, 50);
+                const aLeftX = ax - ux * aLen - ny * aWidth;
+                const aLeftY = ay - uy * aLen + nx * aWidth;
+                const aRightX = ax - ux * aLen + ny * aWidth;
+                const aRightY = ay - uy * aLen - nx * aWidth;
+                const aInnerX = ax - ux * (aLen * 0.5);
+                const aInnerY = ay - uy * (aLen * 0.5);
+
                 return (
                   <g key={`duct-${duct.id || dIdx}`} className="cad-hvac-duct">
                     <polygon
@@ -2930,6 +2945,13 @@ export default function Canvas({
                       strokeWidth={1.2 / zoom}
                       strokeDasharray={`${80 / zoom} ${40 / zoom}`}
                     />
+                    {len > 350 && (
+                      <polygon
+                        points={`${ax},${ay} ${aLeftX},${aLeftY} ${aInnerX},${aInnerY} ${aRightX},${aRightY}`}
+                        fill={ductColor}
+                        opacity="0.8"
+                      />
+                    )}
                     {len > 600 && (
                       <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
                         <rect x="-65" y="-9" width="130" height="18" rx="3" fill="#0F172A" stroke={ductColor} strokeWidth="1" />

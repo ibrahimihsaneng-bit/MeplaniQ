@@ -45,6 +45,7 @@ import BoqDashboardModal from '../features/boq/BoqDashboardModal';
 import ValidationDrawer from '../components/ValidationDrawer';
 import { generateProjectCoordinatedMep, convertSolveDataToCadEntities } from '../features/mep/projectMepEngine';
 import AutoMepModal from '../features/mep/AutoMepModal';
+import MepCalculationModal from '../features/mep/MepCalculationModal';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
 import AutoCadEngineeringPanel from '../features/autocad/AutoCadEngineeringPanel';
 import AutoCad3DViewport from '../features/autocad/AutoCad3DViewport';
@@ -83,6 +84,7 @@ export default function EditorPage() {
 
   // Coordinated Auto-MEP & BIM Studio States
   const [isAutoMepModalOpen, setIsAutoMepModalOpen] = useState(false);
+  const [isCalcModalOpen, setIsCalcModalOpen] = useState(false);
   const [isClashDrawerOpen, setIsClashDrawerOpen] = useState(false);
   const [clashData, setClashData] = useState(null);
   const [isEngineeringPanelOpen, setIsEngineeringPanelOpen] = useState(false);
@@ -2192,6 +2194,30 @@ export default function EditorPage() {
             <span>{isSwitchingVariant ? '🔄...' : `🔄 Model ${currentVariant + 1}`}</span>
           </button>
 
+          {/* 📐 Engineering Calculation & Sizing Sheet */}
+          <button
+            onClick={() => setIsCalcModalOpen(true)}
+            disabled={!solveData}
+            style={{
+              backgroundColor: '#1E293B',
+              border: '1px solid #8B5CF6',
+              color: '#C4B5FD',
+              padding: '5px 9px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Open MEP Engineering Calculation Sheet (ASHRAE Duct Aerodynamics, 3-Phase DB Schedule, UPC Hydraulics, BOQ)"
+          >
+            <span>📐 Calc Sheet</span>
+          </button>
+
           {/* ⚡ Coordinated Auto-MEP Engine Trigger */}
           <button
             onClick={() => setIsAutoMepModalOpen(true)}
@@ -2881,6 +2907,14 @@ export default function EditorPage() {
         onClose={() => setIsAutoMepModalOpen(false)}
         onApply={handleApplyCoordinatedMep}
         projectName={solveData?.project_name}
+      />
+
+      {/* MEP Engineering Calculation & Sizing Sheet Modal */}
+      <MepCalculationModal
+        isOpen={isCalcModalOpen}
+        onClose={() => setIsCalcModalOpen(false)}
+        solveData={solveData}
+        projectName={solveData?.project_name || 'Project'}
       />
 
       {/* Multi-Discipline BIM Clash Matrix Drawer */}
