@@ -20,11 +20,8 @@ services:
         value: 8000
 
   # 2. Vite React Frontend Static Site
-  - type: web
+  - type: static
     name: meplaniq-frontend
-    runtime: static
-    region: oregon
-    plan: free
     buildCommand: "cd frontend && npm install && npm run build"
     staticPublishPath: "./frontend/dist"
     routes:
