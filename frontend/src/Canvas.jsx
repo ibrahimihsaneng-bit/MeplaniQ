@@ -2891,6 +2891,38 @@ export default function Canvas({
                 );
               })}
 
+              {/* In-Line Acoustic Duct Sound Attenuators / Silencers */}
+              {(solveData?.hvac_equipment || []).filter(eq => eq.unit_type === 'Acoustic-Attenuator' || eq.type === 'Silencer').map((sil, sIdx) => {
+                const w = sil.width || 550;
+                const h = sil.height || 380;
+                return (
+                  <g key={`sil-${sil.id || sIdx}`} className="cad-silencer-unit">
+                    <rect
+                      x={sil.x - w / 2}
+                      y={sil.y - h / 2}
+                      width={w}
+                      height={h}
+                      rx={4 / zoom}
+                      fill="rgba(14, 165, 233, 0.22)"
+                      stroke="#0284C7"
+                      strokeWidth={2 / zoom}
+                    />
+                    {/* Acoustic perforated absorption baffles */}
+                    <line x1={sil.x - w / 2 + 40} y1={sil.y - h / 2} x2={sil.x - w / 2 + 40} y2={sil.y + h / 2} stroke="#38BDF8" strokeWidth={1.2 / zoom} strokeDasharray={`${6 / zoom} ${4 / zoom}`} />
+                    <line x1={sil.x - w / 2 + 80} y1={sil.y - h / 2} x2={sil.x - w / 2 + 80} y2={sil.y + h / 2} stroke="#38BDF8" strokeWidth={1.2 / zoom} strokeDasharray={`${6 / zoom} ${4 / zoom}`} />
+                    <line x1={sil.x} y1={sil.y - h / 2} x2={sil.x} y2={sil.y + h / 2} stroke="#38BDF8" strokeWidth={1.5 / zoom} />
+                    <line x1={sil.x + w / 2 - 80} y1={sil.y - h / 2} x2={sil.x + w / 2 - 80} y2={sil.y + h / 2} stroke="#38BDF8" strokeWidth={1.2 / zoom} strokeDasharray={`${6 / zoom} ${4 / zoom}`} />
+                    <line x1={sil.x + w / 2 - 40} y1={sil.y - h / 2} x2={sil.x + w / 2 - 40} y2={sil.y + h / 2} stroke="#38BDF8" strokeWidth={1.2 / zoom} strokeDasharray={`${6 / zoom} ${4 / zoom}`} />
+                    <g transform={`translate(${sil.x}, ${sil.y - h / 2 - 90}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect x="-85" y="-10" width="170" height="20" rx="3" fill="#0F172A" stroke="#0284C7" strokeWidth="1" />
+                      <text x="0" y="3.5" textAnchor="middle" dominantBaseline="middle" fill="#BAE6FD" fontSize="8.5" fontWeight="700">
+                        {sil.label || '🔇 SILENCER (-18 dB)'}
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
+
               {/* Central Ducted HVAC Duct Segments (Supply / Return / Branch) */}
               {(solveData?.hvac_ducts || []).map((duct, dIdx) => {
                 const p1 = duct.p1 || [0, 0];

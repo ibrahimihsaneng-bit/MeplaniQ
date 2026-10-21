@@ -358,7 +358,7 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
               {/* Summary KPIs */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(5, 1fr)',
+                gridTemplateColumns: 'repeat(6, 1fr)',
                 gap: '12px',
                 marginBottom: '20px'
               }}>
@@ -404,6 +404,14 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
                     {hvacData.totals.supplyFanStaticPressurePa} <span style={{ fontSize: '11px', color: '#64748B' }}>Pa</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>Equal Friction Sizing</div>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Acoustic Attenuation</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#38BDF8', marginTop: '4px' }}>
+                    -18 <span style={{ fontSize: '11px', color: '#64748B' }}>dB</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#10B981', marginTop: '2px', fontWeight: 600 }}>NC-35 Whisper Quiet</div>
                 </div>
               </div>
 

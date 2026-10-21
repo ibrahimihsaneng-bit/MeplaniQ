@@ -10,7 +10,8 @@ export default function AutoCadClashDrawer({
   clashData,
   onClose,
   onDownloadAuditReport,
-  onHighlightClash
+  onHighlightClash,
+  onAutoResolveClashes
 }) {
   if (!clashData) return null;
 
@@ -162,6 +163,32 @@ export default function AutoCadClashDrawer({
             </tbody>
           </table>
         </div>
+
+        {/* ⚡ Auto-Resolve All Clashes Trigger */}
+        {onAutoResolveClashes && clashes.length > 0 && (
+          <button
+            type="button"
+            onClick={onAutoResolveClashes}
+            style={{
+              backgroundColor: '#059669',
+              border: '1px solid #10B981',
+              color: '#FFFFFF',
+              padding: '10px 14px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              boxShadow: '0 2px 8px rgba(5, 150, 105, 0.45)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>⚡ Auto-Resolve All Clashes (SMACNA Detour Bypasses)</span>
+          </button>
+        )}
 
         {/* Detailed Clash Incidents List */}
         <div>

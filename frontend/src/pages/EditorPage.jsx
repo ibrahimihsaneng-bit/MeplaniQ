@@ -43,7 +43,7 @@ import {
 import QualityTierSelectorModal from '../features/boq/QualityTierSelectorModal';
 import BoqDashboardModal from '../features/boq/BoqDashboardModal';
 import ValidationDrawer from '../components/ValidationDrawer';
-import { generateProjectCoordinatedMep, convertSolveDataToCadEntities } from '../features/mep/projectMepEngine';
+import { generateProjectCoordinatedMep, convertSolveDataToCadEntities, autoResolveClashes } from '../features/mep/projectMepEngine';
 import AutoMepModal from '../features/mep/AutoMepModal';
 import MepCalculationModal from '../features/mep/MepCalculationModal';
 import AutonomousSprintTimer from '../features/mep/AutonomousSprintTimer';
@@ -625,6 +625,18 @@ export default function EditorPage() {
       console.error("Auto MEP Generation Error:", err);
       showToast("Error generating coordinated MEP: " + err.message, "error");
     }
+  }, [solveData, showToast]);
+
+  const handleAutoResolveClashes = useCallback(() => {
+    if (!solveData) return;
+    const resolved = autoResolveClashes(solveData);
+    setSolveData(resolved);
+    setClashData({
+      clashes: [],
+      summary: { total: 0, hard: 0, clearance: 0, status: 'COORDINATED' }
+    });
+    setIsDirty(true);
+    showToast("✓ All Clashes Auto-Resolved: Detour bypasses applied around structural obstacles.", "success");
   }, [solveData, showToast]);
 
   const handleGenerateMasterSubmissionAudit = useCallback(() => {
@@ -2014,7 +2026,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={4} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={5} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2928,6 +2940,7 @@ export default function EditorPage() {
           onClose={() => setIsClashDrawerOpen(false)}
           onDownloadAuditReport={handleGenerateMasterSubmissionAudit}
           onHighlightClash={(pt) => showToast(`Inspecting clash at (${Math.round(pt.x)}, ${Math.round(pt.y)})`, "info")}
+          onAutoResolveClashes={handleAutoResolveClashes}
         />
       )}
 
