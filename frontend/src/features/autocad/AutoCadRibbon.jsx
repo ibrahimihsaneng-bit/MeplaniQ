@@ -15,6 +15,7 @@ export default function AutoCadRibbon({
   showThermalHeatmap = false,
   onToggleThermalHeatmap,
   onAutoDimensionAll,
+  onInsertScheduleTable,
   showWallDimensions,
   onToggleWallDimensions,
   settings,
@@ -47,9 +48,10 @@ export default function AutoCadRibbon({
 
   const modifyTools = [
     { id: 'trim', label: 'Trim', icon: '✂️', shortcut: 'TR', desc: 'Trim Intersecting Line' },
-    { id: 'fillet', label: 'Fillet', icon: '📐', shortcut: 'F', desc: 'Miter / Fillet Corner' },
-    { id: 'offset', label: 'Offset', icon: '⫽', shortcut: 'O', desc: 'Offset Parallel' },
     { id: 'extend', label: 'Extend', icon: '⤚', shortcut: 'EX', desc: 'Extend to Edge' },
+    { id: 'fillet', label: 'Fillet', icon: '📐', shortcut: 'F', desc: 'Miter / Fillet Corner' },
+    { id: 'chamfer', label: 'Chamfer', icon: '◿', shortcut: 'CHA', desc: 'Bevel Intersecting Corner' },
+    { id: 'offset', label: 'Offset', icon: '⫽', shortcut: 'O', desc: 'Offset Parallel' },
     { id: 'move', label: 'Move', icon: '✥', shortcut: 'M', desc: 'Move Objects' },
     { id: 'copy', label: 'Copy', icon: '📋', shortcut: 'CO', desc: 'Copy Objects' },
     { id: 'rotate', label: 'Rotate', icon: '⟳', shortcut: 'RO', desc: 'Rotate Objects' },
@@ -246,6 +248,28 @@ export default function AutoCadRibbon({
           >
             <span>🌡️</span>
             <span>Heatmap</span>
+          </button>
+
+          {/* Insert Architectural Schedule Table Button */}
+          <button
+            type="button"
+            onClick={onInsertScheduleTable}
+            title="Stamp Standard Architectural Room & Opening Schedule Table onto Sheet (TABLE)"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #38BDF8',
+              color: '#38BDF8',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <span>📑</span>
+            <span>Schedule</span>
           </button>
 
           {/* Convert Linework to MEPlanIQ Solved Rooms */}

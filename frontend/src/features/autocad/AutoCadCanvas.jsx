@@ -14,7 +14,9 @@ import {
   offsetSegment,
   extractRoomsFromLinework,
   trimEntitySegment,
-  extendEntitySegment
+  extendEntitySegment,
+  calculateArcFrom3Points,
+  chamferLineSegments
 } from './cadGeometryUtils';
 import {
   findSnapTarget,
@@ -76,8 +78,9 @@ export default function AutoCadCanvas({
   // Active interactive DRAG/MOVE state for existing entities
   const [dragState, setDragState] = useState(null);
 
-  // Fillet state: first selected segment
+  // Fillet & Chamfer state: first selected segment
   const [filletFirstEntity, setFilletFirstEntity] = useState(null);
+  const [chamferFirstEntity, setChamferFirstEntity] = useState(null);
 
   // Layer visibility & color lookup maps
   const hiddenLayerIds = useMemo(() => new Set((layers || []).filter(l => l.visible === false).map(l => l.id)), [layers]);
@@ -516,6 +519,43 @@ export default function AutoCadCanvas({
       return;
     }
 
+    // 5.2 CHAMFER TOOL
+    if (activeTool === 'chamfer') {
+      if (activeSnap?.entityId) {
+        const ent = entities.find(x => x.id === activeSnap.entityId);
+        if (!ent) return;
+        if (!chamferFirstEntity) {
+          setChamferFirstEntity(ent);
+          onPromptUpdate && onPromptUpdate("CHAMFER: Select second line to bevel corner:");
+        } else {
+          const s1 = chamferFirstEntity.type === 'line' ? chamferFirstEntity : { p1: chamferFirstEntity.centerline?.p1, p2: chamferFirstEntity.centerline?.p2, id: chamferFirstEntity.id };
+          const s2 = ent.type === 'line' ? ent : { p1: ent.centerline?.p1, p2: ent.centerline?.p2, id: ent.id };
+          const res = chamferLineSegments(s1, s2, 200);
+          if (res) {
+            if (chamferFirstEntity.type === 'line') {
+              onUpdateEntity(chamferFirstEntity.id, { p1: res.newSeg1.p1, p2: res.newSeg1.p2 });
+            } else {
+              onUpdateEntity(chamferFirstEntity.id, { centerline: { p1: res.newSeg1.p1, p2: res.newSeg1.p2 } });
+            }
+            if (ent.type === 'line') {
+              onUpdateEntity(ent.id, { p1: res.newSeg2.p1, p2: res.newSeg2.p2 });
+            } else {
+              onUpdateEntity(ent.id, { centerline: { p1: res.newSeg2.p1, p2: res.newSeg2.p2 } });
+            }
+            onAddEntity({
+              type: 'line',
+              p1: res.chamferLine.p1,
+              p2: res.chamferLine.p2,
+              layer: chamferFirstEntity.layer || activeLayerId
+            });
+            onPromptUpdate && onPromptUpdate("CHAMFER: Corner beveled with 200 mm chamfer.");
+          }
+          setChamferFirstEntity(null);
+        }
+      }
+      return;
+    }
+
     // 5.5 ROTATE TOOL
     if (activeTool === 'rotate') {
       const hitRotate = hitTestEntity(pt, entities, Math.max(120, 18 / zoom));
@@ -712,8 +752,8 @@ export default function AutoCadCanvas({
       return;
     }
 
-    // 9. WALL or LINE DRAWING CHAIN
-    if (activeTool === 'wall' || activeTool === 'line') {
+    // 9. WALL, LINE or POLYLINE DRAWING CHAIN
+    if (activeTool === 'wall' || activeTool === 'line' || activeTool === 'polyline') {
       if (!draftState) {
         setDraftState({ p1: pt });
       } else {
@@ -733,7 +773,8 @@ export default function AutoCadCanvas({
               type: 'line',
               p1,
               p2,
-              layer: activeLayerId
+              layer: activeLayerId,
+              isPolyline: activeTool === 'polyline'
             });
           }
           setDraftState({ p1: p2 });
@@ -765,6 +806,29 @@ export default function AutoCadCanvas({
         const r = dist(draftState.center, pt);
         if (r > 10) {
           onAddEntity({ type: 'circle', center: draftState.center, radius: Math.round(r), layer: activeLayerId });
+        }
+        setDraftState(null);
+      }
+      return;
+    }
+
+    // 11.5 ARC (3-Point Arc)
+    if (activeTool === 'arc') {
+      if (!draftState) {
+        setDraftState({ p1: pt, step: 1 });
+        onPromptUpdate && onPromptUpdate("ARC: Specify second point on arc:");
+      } else if (draftState.step === 1) {
+        setDraftState({ p1: draftState.p1, p2: pt, step: 2 });
+        onPromptUpdate && onPromptUpdate("ARC: Specify end point of arc:");
+      } else if (draftState.step === 2) {
+        const arcData = calculateArcFrom3Points(draftState.p1, draftState.p2, pt);
+        if (arcData) {
+          onAddEntity({
+            type: 'arc',
+            ...arcData,
+            layer: activeLayerId
+          });
+          onPromptUpdate && onPromptUpdate("ARC: Created 3-point circular arc.");
         }
         setDraftState(null);
       }
@@ -1151,6 +1215,19 @@ export default function AutoCadCanvas({
             if (ent.type === 'circle' && ent.center && ent.radius) {
               return (
                 <circle key={entKey} cx={ent.center.x} cy={ent.center.y} r={ent.radius} fill={isSelected ? "rgba(250, 204, 21, 0.2)" : "none"} stroke={entColor} strokeWidth={strokeW} />
+              );
+            }
+
+            if (ent.type === 'arc' && ent.svgPath) {
+              return (
+                <path
+                  key={entKey}
+                  d={ent.svgPath}
+                  fill="none"
+                  stroke={entColor}
+                  strokeWidth={strokeW}
+                  strokeLinecap="round"
+                />
               );
             }
 

@@ -16,7 +16,8 @@ import {
   rotateEntityGeometry,
   mirrorEntityGeometry,
   recalculateDoorGeometry,
-  generateAutoDimensions
+  generateAutoDimensions,
+  generateScheduleTable
 } from '../features/autocad/cadGeometryUtils';
 import { fetchProjectById, updateProjectById, createManualProject, solveCadGeometry, exportDxf } from '../api';
 import Toast from '../Toast';
@@ -225,6 +226,41 @@ export default function AutoCadPage() {
     }
   }, [entities, addEntities, appendHistory, showToast]);
 
+  const handleInsertScheduleTable = useCallback(() => {
+    let minX = 0, minY = 0, maxX = 6000, maxY = 5000;
+    if (entities.length > 0) {
+      const xs = [];
+      const ys = [];
+      entities.forEach(e => {
+        if (e.centerline) {
+          xs.push(e.centerline.p1.x, e.centerline.p2.x);
+          ys.push(e.centerline.p1.y, e.centerline.p2.y);
+        } else if (e.p1 && e.p2) {
+          xs.push(e.p1.x, e.p2.x);
+          ys.push(e.p1.y, e.p2.y);
+        } else if (e.x !== undefined && e.y !== undefined) {
+          xs.push(e.x);
+          ys.push(e.y);
+        }
+      });
+      if (xs.length > 0) {
+        minX = Math.min(...xs);
+        maxX = Math.max(...xs);
+        minY = Math.min(...ys);
+        maxY = Math.max(...ys);
+      }
+    }
+    const origin = { x: maxX + 1000, y: minY };
+    const tableEntities = generateScheduleTable(entities, detectedRooms, origin);
+    if (tableEntities.length > 0) {
+      addEntities(tableEntities);
+      appendHistory(`TABLE: Generated Architectural Permit Schedule with ${tableEntities.length} linework/text entities.`);
+      showToast("Permit Schedule Table placed in drawing", "success");
+    } else {
+      showToast("No schedule items to display", "info");
+    }
+  }, [entities, detectedRooms, addEntities, appendHistory, showToast]);
+
   const handleFlipDoorSwing = useCallback(() => {
     if (selectedIds.length === 0) return;
     selectedIds.forEach(id => {
@@ -350,6 +386,12 @@ export default function AutoCadPage() {
       case 'FILLET':
         setActiveTool('fillet');
         appendHistory("FILLET Select first line to miter corner:");
+        break;
+
+      case 'CHA':
+      case 'CHAMFER':
+        setActiveTool('chamfer');
+        appendHistory("CHAMFER Select first line to chamfer corner:");
         break;
 
       case 'L':
@@ -483,6 +525,11 @@ export default function AutoCadPage() {
         handleAutoDimensionAll();
         break;
 
+      case 'TABLE':
+      case 'SCHEDULE':
+        handleInsertScheduleTable();
+        break;
+
       case 'U':
       case 'UNDO':
         if (undo()) appendHistory("UNDO");
@@ -511,7 +558,7 @@ export default function AutoCadPage() {
         appendHistory(`Unknown command "${cleanCmd}". Type WALL, DOOR, WINDOW, FILLET, LINE, REC, DIM, or BLK.`, 'error');
         break;
     }
-  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, appendHistory]);
+  }, [selectedIds, deleteEntities, undo, redo, showWallDimensions, showThermalHeatmap, handleAutoDimensionAll, handleInsertScheduleTable, appendHistory]);
 
   // Coordinate Input Handler
   const handleCoordinateSubmit = useCallback((coordStr) => {
@@ -717,6 +764,7 @@ export default function AutoCadPage() {
         showThermalHeatmap={showThermalHeatmap}
         onToggleThermalHeatmap={() => setShowThermalHeatmap(prev => !prev)}
         onAutoDimensionAll={handleAutoDimensionAll}
+        onInsertScheduleTable={handleInsertScheduleTable}
         settings={settings}
         onUpdateSetting={updateSetting}
         canUndo={canUndo}

@@ -969,3 +969,175 @@ export function generateAutoDimensions(entities, offsetMm = 450) {
 
   return dims;
 }
+
+/**
+ * Calculates a 3-point circular arc passing through p1 (start), p2 (mid), and p3 (end).
+ * Returns { center, radius, p1, p2, p3, svgPath } or null if points are collinear.
+ */
+export function calculateArcFrom3Points(p1, p2, p3) {
+  const x1 = p1.x, y1 = p1.y;
+  const x2 = p2.x, y2 = p2.y;
+  const x3 = p3.x, y3 = p3.y;
+
+  const D = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
+  if (Math.abs(D) < 1e-5) return null; // Collinear points
+
+  const sq1 = x1 * x1 + y1 * y1;
+  const sq2 = x2 * x2 + y2 * y2;
+  const sq3 = x3 * x3 + y3 * y3;
+
+  const cx = Math.round(((sq1 * (y2 - y3) + sq2 * (y3 - y1) + sq3 * (y1 - y2)) / D) * 10) / 10;
+  const cy = Math.round(((sq1 * (x3 - x2) + sq2 * (x1 - x3) + sq3 * (x2 - x1)) / D) * 10) / 10;
+  const radius = Math.round(Math.sqrt((x1 - cx) ** 2 + (y1 - cy) ** 2) * 10) / 10;
+
+  // Cross product to determine sweep direction
+  const cross = (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1);
+  const sweepFlag = cross < 0 ? 0 : 1;
+
+  // Angles to determine large arc flag
+  const a1 = Math.atan2(y1 - cy, x1 - cx);
+  const a3 = Math.atan2(y3 - cy, x3 - cx);
+  const norm = (a) => (a < 0 ? a + 2 * Math.PI : a);
+  const diff = Math.abs(norm(a3) - norm(a1));
+  const largeArcFlag = diff > Math.PI ? 1 : 0;
+
+  const svgPath = `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${x3} ${y3}`;
+
+  return {
+    center: { x: cx, y: cy },
+    radius,
+    p1: { ...p1 },
+    p2: { ...p2 },
+    p3: { ...p3 },
+    svgPath
+  };
+}
+
+/**
+ * Chamfers two intersecting line segments by distance d1 and d2.
+ * Trims both segments back by the chamfer distance from their intersection
+ * and returns the new beveled line segment between them.
+ */
+export function chamferLineSegments(seg1, seg2, distance = 150) {
+  const inter = getLineIntersection(seg1.p1, seg1.p2, seg2.p1, seg2.p2, true);
+  if (!inter) return null;
+
+  // Trim seg1 towards intersection
+  const d1_p1 = dist(seg1.p1, inter);
+  const d1_p2 = dist(seg1.p2, inter);
+  const near1 = d1_p1 < d1_p2 ? 'p1' : 'p2';
+  const far1 = near1 === 'p1' ? seg1.p2 : seg1.p1;
+  const cut1 = pointFromPolar(inter, distance, angleDeg(inter, far1));
+
+  // Trim seg2 towards intersection
+  const d2_p1 = dist(seg2.p1, inter);
+  const d2_p2 = dist(seg2.p2, inter);
+  const near2 = d2_p1 < d2_p2 ? 'p1' : 'p2';
+  const far2 = near2 === 'p1' ? seg2.p2 : seg2.p1;
+  const cut2 = pointFromPolar(inter, distance, angleDeg(inter, far2));
+
+  return {
+    newSeg1: {
+      p1: near1 === 'p1' ? cut1 : seg1.p1,
+      p2: near1 === 'p2' ? cut1 : seg1.p2
+    },
+    newSeg2: {
+      p1: near2 === 'p1' ? cut2 : seg2.p1,
+      p2: near2 === 'p2' ? cut2 : seg2.p2
+    },
+    chamferLine: {
+      p1: { x: Math.round(cut1.x), y: Math.round(cut1.y) },
+      p2: { x: Math.round(cut2.x), y: Math.round(cut2.y) }
+    }
+  };
+}
+
+/**
+ * Generates an AutoCAD-standard Door, Window & Room Schedule Table
+ * as a group of lines and text entities to stamp onto the drawing sheet.
+ */
+export function generateScheduleTable(entities, detectedRooms = [], origin = { x: 8000, y: 1000 }) {
+  const elements = [];
+  const colWidths = [1800, 2200, 1400, 1800]; // mm
+  const rowHeight = 400; // mm
+  const totalW = colWidths.reduce((a, b) => a + b, 0);
+  const headerText = "ARCHITECTURAL SCHEDULE OF AREAS & OPENINGS";
+
+  // Data rows
+  const rows = [
+    ["SPACE / OPENING", "CLASSIFICATION", "AREA / SIZE", "SPECIFICATION"],
+    ...detectedRooms.map(r => [
+      (r.name || 'Room').toUpperCase(),
+      "Habitable Space",
+      `${r.carpet_area_sqm || 15} m²`,
+      "Vitrified Tiles (600×600)"
+    ]),
+    ["MAIN DOOR (D1)", "Flush Teak Door", "1000 × 2100 mm", "Hardwood Frame"],
+    ["ROOM DOORS (D2)", "Panel Door", "900 × 2100 mm", "Mortise Lock"],
+    ["WINDOWS (W1)", "Aluminum 3-Track", "1500 × 1200 mm", "Clear Float Glass"]
+  ];
+
+  const totalH = (rows.length + 1) * rowHeight;
+
+  // Outer Border
+  elements.push({
+    id: `sched-box-${Date.now()}`,
+    type: 'rect',
+    p1: { x: origin.x, y: origin.y },
+    p2: { x: origin.x + totalW, y: origin.y + totalH },
+    layer: 'A-ANNO'
+  });
+
+  // Title Row
+  elements.push({
+    id: `sched-title-${Date.now()}`,
+    type: 'text',
+    text: headerText,
+    x: origin.x + totalW / 2,
+    y: origin.y + totalH - 260,
+    fontSize: 220,
+    layer: 'A-ANNO'
+  });
+
+  // Row lines & Texts
+  rows.forEach((row, rIdx) => {
+    const yPos = origin.y + totalH - (rIdx + 1) * rowHeight;
+    // Row divider
+    elements.push({
+      id: `sched-rowline-${rIdx}-${Date.now()}`,
+      type: 'line',
+      p1: { x: origin.x, y: yPos },
+      p2: { x: origin.x + totalW, y: yPos },
+      layer: 'A-ANNO'
+    });
+
+    let curX = origin.x;
+    row.forEach((cell, cIdx) => {
+      elements.push({
+        id: `sched-cell-${rIdx}-${cIdx}-${Date.now()}`,
+        type: 'text',
+        text: String(cell),
+        x: curX + 60,
+        y: yPos - 270,
+        fontSize: rIdx === 0 ? 170 : 150,
+        layer: 'A-ANNO'
+      });
+      curX += colWidths[cIdx];
+    });
+  });
+
+  // Vertical column dividers
+  let colX = origin.x;
+  for (let c = 0; c < colWidths.length - 1; c++) {
+    colX += colWidths[c];
+    elements.push({
+      id: `sched-colline-${c}-${Date.now()}`,
+      type: 'line',
+      p1: { x: colX, y: origin.y },
+      p2: { x: colX, y: origin.y + totalH - rowHeight },
+      layer: 'A-ANNO'
+    });
+  }
+
+  return elements;
+}
