@@ -107,7 +107,7 @@ export default function AutoCadRibbon({
           <span style={{ color: '#64748B', fontSize: '11px' }}>|</span>
           <span style={{ color: '#94A3B8', fontWeight: 600, fontSize: '12px' }}>MEPlanIQ Direct 2D Drafter</span>
           <span style={{ color: '#64748B', fontSize: '11px' }}>|</span>
-          <AutonomousSprintTimer currentCycle={3} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={4} totalHours={24} />
         </div>
 
         {/* Global Action Buttons */}

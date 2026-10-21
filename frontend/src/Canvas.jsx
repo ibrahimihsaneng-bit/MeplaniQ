@@ -2927,13 +2927,26 @@ export default function Canvas({
                 const aInnerX = ax - ux * (aLen * 0.5);
                 const aInnerY = ay - uy * (aLen * 0.5);
 
+                const isDuctSelected = selectedItem?.item?.id === duct.id && selectedItem?.type === "HvacDuct";
+
                 return (
-                  <g key={`duct-${duct.id || dIdx}`} className="cad-hvac-duct">
+                  <g
+                    key={`duct-${duct.id || dIdx}`}
+                    className="cad-hvac-duct"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedItem({ type: "HvacDuct", item: duct });
+                    }}
+                    style={{
+                      cursor: "pointer",
+                      filter: isDuctSelected ? "drop-shadow(0px 0px 8px #F97316)" : "none"
+                    }}
+                  >
                     <polygon
                       points={polyPoints}
-                      fill={isTrunk ? "rgba(249, 115, 22, 0.16)" : "rgba(251, 146, 60, 0.12)"}
-                      stroke={ductColor}
-                      strokeWidth={2 / zoom}
+                      fill={isDuctSelected ? "rgba(249, 115, 22, 0.35)" : (isTrunk ? "rgba(249, 115, 22, 0.16)" : "rgba(251, 146, 60, 0.12)")}
+                      stroke={isDuctSelected ? "#FFFFFF" : ductColor}
+                      strokeWidth={(isDuctSelected ? 3.5 : 2) / zoom}
                       strokeLinejoin="miter"
                     />
                     <line
@@ -3750,6 +3763,111 @@ export default function Canvas({
                 style={{ width: "100%", background: "#1E293B", border: "1px solid #475569", color: "white", padding: "6px 8px", borderRadius: 4, marginBottom: 12 }}
               />
             </>
+          )}
+
+          {selectedItem.type === "HvacDuct" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", backgroundColor: "#0F172A", padding: "8px", borderRadius: "6px", fontSize: "11px" }}>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Airflow:</span>
+                  <div style={{ color: "#38BDF8", fontWeight: 700 }}>{selectedItem.item.cfm || 300} CFM</div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Velocity:</span>
+                  <div style={{ color: (selectedItem.item.velocity_ms || 4.5) <= 5.5 ? "#10B981" : "#F59E0B", fontWeight: 700 }}>
+                    {selectedItem.item.velocity_ms || 4.5} m/s
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Friction:</span>
+                  <div style={{ color: "#CBD5E1", fontWeight: 600 }}>{selectedItem.item.friction_loss_pa_m || 0.8} Pa/m</div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Hydraulic Dh:</span>
+                  <div style={{ color: "#CBD5E1", fontWeight: 600 }}>{selectedItem.item.dh_mm || 250} mm</div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "11px", color: "#94A3B8", marginBottom: "4px" }}>
+                  Aspect Ratio Presets (W × H mm):
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "4px" }}>
+                  {[
+                    { label: "Standard", w: selectedItem.item.width || 400, h: selectedItem.item.height || 250 },
+                    { label: "Low-Profile", w: Math.round((selectedItem.item.width || 400) * 1.25), h: Math.round((selectedItem.item.height || 250) * 0.8) },
+                    { label: "High-Aspect", w: Math.round((selectedItem.item.width || 400) * 1.5), h: Math.round((selectedItem.item.height || 250) * 0.67) },
+                    { label: "Square Section", w: Math.round(Math.sqrt((selectedItem.item.width || 400) * (selectedItem.item.height || 250))), h: Math.round(Math.sqrt((selectedItem.item.width || 400) * (selectedItem.item.height || 250))) }
+                  ].map((preset, pIdx) => (
+                    <button
+                      key={pIdx}
+                      type="button"
+                      onClick={() => {
+                        const newW = preset.w;
+                        const newH = preset.h;
+                        const newAero = ((newW * newH) > 0)
+                          ? parseFloat((((selectedItem.item.cfm || 300) * 0.000471947) / ((newW * newH) / 1000000.0)).toFixed(2))
+                          : 4.5;
+                        setSelectedItem(prev => ({
+                          ...prev,
+                          item: {
+                            ...prev.item,
+                            width: newW,
+                            height: newH,
+                            velocity_ms: newAero,
+                            label: `${newW}x${newH} (${prev.item.cfm || 300} CFM • ${newAero} m/s)`
+                          }
+                        }));
+                      }}
+                      style={{
+                        backgroundColor: "#1E293B",
+                        border: "1px solid #334155",
+                        color: "#E2E8F0",
+                        padding: "4px 6px",
+                        borderRadius: "4px",
+                        fontSize: "10px",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        textAlign: "center"
+                      }}
+                    >
+                      {preset.label}: {preset.w}×{preset.h}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedItem.type === "PlumbingPipe" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", backgroundColor: "#0F172A", padding: "8px", borderRadius: "6px", fontSize: "11px" }}>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>System:</span>
+                  <div style={{ color: (selectedItem.item.system_type || '').includes('SOIL') ? "#FCD34D" : "#38BDF8", fontWeight: 700 }}>
+                    {selectedItem.item.system_type || 'Plumbing'}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Diameter:</span>
+                  <div style={{ color: "#FFFFFF", fontWeight: 700 }}>
+                    Ø{selectedItem.item.diameter_mm || selectedItem.item.diameter || 25} mm {selectedItem.item.material || 'CPVC'}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Gradient / Fall:</span>
+                  <div style={{ color: "#10B981", fontWeight: 600 }}>
+                    {selectedItem.item.slope || '1:40 (2.5%) ⇘'}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Velocity:</span>
+                  <div style={{ color: "#CBD5E1", fontWeight: 600 }}>
+                    {selectedItem.item.velocity_ms ? `${selectedItem.item.velocity_ms} m/s` : '1.45 m/s'}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {(selectedItem.type === "Door") && (

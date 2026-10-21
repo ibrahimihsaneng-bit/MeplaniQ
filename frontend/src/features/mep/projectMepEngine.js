@@ -787,6 +787,31 @@ export function generateProjectCoordinatedMep(solveData, options = {}) {
   const icX = maxX + 450;
   const icY = minY - 350;
 
+  // External Water Meter & Sewer Inspection Chamber
+  plumbingFixtures.push({
+    id: `WM-01-${timestamp}`,
+    name: 'Water Meter & PRV Riser',
+    type: 'Water Meter',
+    category: 'Supply',
+    host_room_id: 'External Service',
+    x: riserX,
+    y: riserY,
+    width: 350,
+    height: 350
+  });
+
+  plumbingFixtures.push({
+    id: `IC-01-${timestamp}`,
+    name: 'Inspection Chamber (IL -1.25m)',
+    type: 'Inspection Chamber',
+    category: 'Drainage',
+    host_room_id: 'External Drainage',
+    x: icX,
+    y: icY,
+    width: 500,
+    height: 500
+  });
+
   // Water Mains run
   const dcwMainY = minY - 200;
   plumbingPipes.push({
@@ -814,7 +839,11 @@ export function generateProjectCoordinatedMep(solveData, options = {}) {
     diameter_mm: 110,
     material: 'uPVC',
     flow_direction: 'drainage',
-    label: 'Ø110 uPVC SOIL & WASTE (1:40 GRAVITY SLOPE)',
+    slope: '1:40',
+    gradient_percent: 2.5,
+    velocity_ms: 0.95,
+    invert_level_m: -1.25,
+    label: 'Ø110 uPVC SOIL & WASTE (1:40 FALL ⇘)',
     path_points: [
       [minX + 200, soilMainY],
       [icX, soilMainY],
