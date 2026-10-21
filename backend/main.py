@@ -31,6 +31,8 @@ from backend.geometry import (
 from backend.dxf_exporter import export_floorplan_to_dxf
 from backend.pdf_exporter import generate_project_boq_pdf, generate_detailed_boq_pdf
 from backend.excel_exporter import export_project_to_excel
+from backend.autolisp_exporter import export_floorplan_to_autolisp
+from backend.ifc_exporter import export_floorplan_to_ifc
 from backend.database import (
     init_db,
     get_all_projects_summary,
@@ -854,4 +856,77 @@ def export_dxf_endpoint(payload: SolveResponse):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DXF generation error: {str(e)}")
+
+
+@app.post("/api/export-autolisp")
+def export_autolisp_endpoint(payload: Dict[str, Any] = Body(...), project_name: str = "MeplanIQ Project"):
+    """
+    Generates an Autodesk AutoCAD AutoLISP (.lsp) routine from solved CAD/MEP payload.
+    """
+    try:
+        lsp_content = export_floorplan_to_autolisp(payload, project_name=project_name)
+        headers = {
+            "Content-Disposition": f"attachment; filename={project_name.replace(' ', '_')}.lsp"
+        }
+        return Response(
+            content=lsp_content,
+            media_type="text/plain",
+            headers=headers
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AutoLISP export error: {str(e)}")
+
+
+@app.get("/api/projects/{project_id}/export-autolisp")
+def export_project_autolisp_endpoint(project_id: str):
+    """
+    Exports a project by ID as an Autodesk AutoCAD AutoLISP (.lsp) routine.
+    """
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    cad_data = proj.get("cad_json_data", {})
+    name = proj.get("name", "MeplanIQ Project")
+    lsp_content = export_floorplan_to_autolisp(cad_data, project_name=name)
+    headers = {
+        "Content-Disposition": f"attachment; filename={name.replace(' ', '_')}.lsp"
+    }
+    return Response(content=lsp_content, media_type="text/plain", headers=headers)
+
+
+@app.post("/api/export-ifc")
+def export_ifc_endpoint(payload: Dict[str, Any] = Body(...), project_name: str = "MeplanIQ Building"):
+    """
+    Generates an ISO 16739-1:2018 IFC4 OpenBIM STEP model from solved CAD/MEP payload.
+    """
+    try:
+        ifc_content = export_floorplan_to_ifc(payload, project_name=project_name)
+        headers = {
+            "Content-Disposition": f"attachment; filename={project_name.replace(' ', '_')}.ifc"
+        }
+        return Response(
+            content=ifc_content,
+            media_type="application/x-step",
+            headers=headers
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"IFC export error: {str(e)}")
+
+
+@app.get("/api/projects/{project_id}/export-ifc")
+def export_project_ifc_endpoint(project_id: str):
+    """
+    Exports a project by ID as an ISO 16739-1:2018 IFC4 OpenBIM STEP model.
+    """
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    cad_data = proj.get("cad_json_data", {})
+    name = proj.get("name", "MeplanIQ Building")
+    ifc_content = export_floorplan_to_ifc(cad_data, project_name=name)
+    headers = {
+        "Content-Disposition": f"attachment; filename={name.replace(' ', '_')}.ifc"
+    }
+    return Response(content=ifc_content, media_type="application/x-step", headers=headers)
+
 

@@ -47,6 +47,8 @@ import { generateProjectCoordinatedMep, convertSolveDataToCadEntities, autoResol
 import AutoMepModal from '../features/mep/AutoMepModal';
 import MepCalculationModal from '../features/mep/MepCalculationModal';
 import AutonomousSprintTimer from '../features/mep/AutonomousSprintTimer';
+import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
+import { downloadIfc4Model } from '../features/mep/ifcExportBridge';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
 import AutoCadEngineeringPanel from '../features/autocad/AutoCadEngineeringPanel';
 import AutoCad3DViewport from '../features/autocad/AutoCad3DViewport';
@@ -1845,6 +1847,32 @@ export default function EditorPage() {
 
   const handleExportPdf = handleExportQuantitiesPdf;
 
+  const handleExportAutoLisp = () => {
+    if (!solveData) {
+      showToast("No active plan geometry to export.", "error");
+      return;
+    }
+    try {
+      downloadAutoLispScript([], solveData, projectName || 'MeplanIQ_Floorplan');
+      showToast("AutoCAD AutoLISP (.lsp) routine exported! Load in AutoCAD via APPLOAD -> MEPDRAW.", "success");
+    } catch (err) {
+      showToast(`AutoLISP export failed: ${err.message}`, "error");
+    }
+  };
+
+  const handleExportIfc = () => {
+    if (!solveData) {
+      showToast("No active plan geometry to export.", "error");
+      return;
+    }
+    try {
+      downloadIfc4Model([], solveData, projectName || 'MeplanIQ_Building');
+      showToast("Revit / OpenBIM IFC4 model exported successfully!", "success");
+    } catch (err) {
+      showToast(`IFC export failed: ${err.message}`, "error");
+    }
+  };
+
   const handleExportExcel = async () => {
     if (!solveData) {
       showToast("No active plan geometry to export.", "error");
@@ -2026,7 +2054,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={6} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={7} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2512,6 +2540,54 @@ export default function EditorPage() {
             title="Export Consolidated Excel (.xlsx) Schedules"
           >
             {isExportingExcel ? 'XLSX...' : '📊 Excel'}
+          </button>
+
+          {/* 📜 AutoLISP Export */}
+          <button
+            onClick={handleExportAutoLisp}
+            disabled={!solveData}
+            style={{
+              backgroundColor: 'var(--bg-elevated)',
+              border: '1px solid var(--border-subtle)',
+              color: '#FCD34D',
+              padding: '5px 8px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Export Autodesk AutoCAD AutoLISP (.lsp) Script"
+          >
+            <span>📜 AutoLISP</span>
+          </button>
+
+          {/* 🏢 Revit IFC Export */}
+          <button
+            onClick={handleExportIfc}
+            disabled={!solveData}
+            style={{
+              backgroundColor: 'var(--bg-elevated)',
+              border: '1px solid var(--border-subtle)',
+              color: '#A78BFA',
+              padding: '5px 8px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Export ISO 16739-1:2018 IFC4 Model for Autodesk Revit & ArchiCAD"
+          >
+            <span>🏢 Revit IFC</span>
           </button>
         </div>
       </nav>

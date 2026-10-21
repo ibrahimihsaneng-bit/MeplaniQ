@@ -38,6 +38,8 @@ export default function AutoCadRibbon({
   onExportDxf,
   onExportSvg,
   onExportPng,
+  onExportAutoLisp,
+  onExportIfc,
   onClearAll,
   isConverting = false
 }) {
@@ -107,7 +109,7 @@ export default function AutoCadRibbon({
           <span style={{ color: '#64748B', fontSize: '11px' }}>|</span>
           <span style={{ color: '#94A3B8', fontWeight: 600, fontSize: '12px' }}>MEPlanIQ Direct 2D Drafter</span>
           <span style={{ color: '#64748B', fontSize: '11px' }}>|</span>
-          <AutonomousSprintTimer currentCycle={6} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={7} totalHours={24} />
         </div>
 
         {/* Global Action Buttons */}
@@ -493,6 +495,40 @@ export default function AutoCadRibbon({
             }}
           >
             SVG
+          </button>
+
+          <button
+            type="button"
+            onClick={onExportAutoLisp}
+            title="Export Autodesk AutoCAD AutoLISP (.lsp) Script"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #334155',
+              color: '#FCD34D',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700
+            }}
+          >
+            LSP
+          </button>
+
+          <button
+            type="button"
+            onClick={onExportIfc}
+            title="Export Revit / OpenBIM IFC4 (.ifc) Model"
+            style={{
+              background: '#1E293B',
+              border: '1px solid #334155',
+              color: '#A78BFA',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 700
+            }}
+          >
+            IFC
           </button>
 
           <button

@@ -29,6 +29,8 @@ import {
 } from '../features/autocad/cadGeometryUtils';
 import { fetchProjectById, updateProjectById, createManualProject, solveCadGeometry, exportDxf } from '../api';
 import Toast from '../Toast';
+import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
+import { downloadIfc4Model } from '../features/mep/ifcExportBridge';
 
 export default function AutoCadPage() {
   const params = useParams();
@@ -857,6 +859,28 @@ export default function AutoCadPage() {
     }
   };
 
+  const handleExportAutoLisp = () => {
+    try {
+      appendHistory("Generating Autodesk AutoLISP (.lsp) routine...", "info");
+      downloadAutoLispScript(entities, solvedData, projectName || 'MeplanIQ_Draft');
+      showToast("AutoCAD AutoLISP (.lsp) routine downloaded! Load via APPLOAD -> MEPDRAW.", "success");
+      appendHistory("Exported AutoLISP (.lsp) routine.", "info");
+    } catch (err) {
+      showToast(`AutoLISP export failed: ${err.message}`, "error");
+    }
+  };
+
+  const handleExportIfc = () => {
+    try {
+      appendHistory("Generating ISO 16739-1:2018 IFC4 OpenBIM model...", "info");
+      downloadIfc4Model(entities, solvedData, projectName || 'MeplanIQ_Building');
+      showToast("Revit / OpenBIM IFC4 model exported successfully!", "success");
+      appendHistory("Exported IFC4 BIM model.", "info");
+    } catch (err) {
+      showToast(`IFC export failed: ${err.message}`, "error");
+    }
+  };
+
   const handleExportPng = () => {
     try {
       const svgElem = document.querySelector('.autocad-page-container svg');
@@ -941,6 +965,8 @@ export default function AutoCadPage() {
         onExportDxf={handleExportDxf}
         onExportSvg={handleExportSvg}
         onExportPng={handleExportPng}
+        onExportAutoLisp={handleExportAutoLisp}
+        onExportIfc={handleExportIfc}
         onClearAll={clearAll}
         isConverting={isConverting}
       />
