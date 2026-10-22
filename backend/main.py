@@ -980,3 +980,31 @@ def project_electrical_fault_analysis_endpoint(project_id: str, transformer_kva:
         raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
     from backend.electrical.short_circuit import analyze_building_electrical_network_faults
     return analyze_building_electrical_network_faults(transformer_kva=transformer_kva)
+
+
+@app.post("/api/fire-protection/hydraulic-analysis")
+def fire_protection_analysis_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Computes NFPA 13 sprinkler demand, NFPA 14 wet riser standpipe flow,
+    NFPA 20 fire booster pump sizing, and NFPA 22 storage tank capacity.
+    """
+    from backend.fire_protection import analyze_building_fire_protection_system
+    floor_area = float(payload.get("floor_area_sqm", 240.0))
+    height = float(payload.get("building_height_m", 12.0))
+    hazard = str(payload.get("hazard_class", "light_hazard"))
+    return analyze_building_fire_protection_system(floor_area_sqm=floor_area, building_height_m=height, hazard_class=hazard)
+
+
+@app.get("/api/projects/{project_id}/fire-protection-analysis")
+def project_fire_protection_analysis_endpoint(project_id: str, hazard_class: str = "light_hazard"):
+    """
+    Executes an integrated NFPA fire safety hydraulic analysis for an existing project by ID.
+    """
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    cad_data = proj.get("cad_json_data", {})
+    rooms = cad_data.get("rooms", [])
+    total_area = sum(float(r.get("area", 20.0)) for r in rooms) if rooms else 240.0
+    from backend.fire_protection import analyze_building_fire_protection_system
+    return analyze_building_fire_protection_system(floor_area_sqm=total_area, hazard_class=hazard_class)

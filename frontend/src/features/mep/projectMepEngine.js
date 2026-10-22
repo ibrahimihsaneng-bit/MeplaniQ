@@ -1969,3 +1969,136 @@ export function calculateShortCircuitFaultCurrents(transformerKva = 160.0, utili
     nodes
   };
 }
+
+
+/**
+ * NFPA 13, NFPA 14 & NFPA 20 Fire Protection & Life Safety Hydraulics.
+ * Computes sprinkler K-factor discharge (Q = K * sqrt(P)), wet riser standpipe demand,
+ * fire booster pump head & motor power, and dedicated water storage tank capacity.
+ */
+export function calculateFireProtectionHydraulics(floorAreaSqm = 240.0, buildingHeightM = 12.0, hazardClass = 'light_hazard') {
+  const isOrdinary = hazardClass.toLowerCase().includes('ordinary');
+
+  // 1. Single Sprinkler Head Discharge (Q = K * sqrt(P))
+  const kFactor = 5.6; // Standard 1/2" (15mm) NPT orifice
+  const minResidualPsi = 7.0; // NFPA 13 minimum residual operating pressure
+  const singleHeadFlowGpm = parseFloat((kFactor * Math.sqrt(minResidualPsi)).toFixed(2)); // 14.81 GPM
+  const singleHeadFlowLpm = parseFloat((singleHeadFlowGpm * 3.78541).toFixed(1)); // 56.1 LPM
+
+  // 2. NFPA 13 Sprinkler System Demand
+  const designDensity = isOrdinary ? 0.15 : 0.10; // GPM/sqft
+  const remoteAreaSqft = 1500.0;
+  const maxCoverageSqft = isOrdinary ? 130.0 : 200.0;
+  const operatingHeadsCount = Math.ceil(remoteAreaSqft / maxCoverageSqft);
+
+  // Total building sprinkler count estimate
+  const totalBuildingSqft = floorAreaSqm * 10.7639;
+  const totalSprinklersCount = Math.ceil(totalBuildingSqft / (maxCoverageSqft * 0.85));
+
+  // Sprinkler flow with 15% hydraulic imbalance factor
+  const sprinklerFlowGpm = parseFloat((remoteAreaSqft * designDensity * 1.15).toFixed(1));
+  const sprinklerFlowLpm = parseFloat((sprinklerFlowGpm * 3.78541).toFixed(1));
+
+  // Hose stream allowance (NFPA 13 Table 19.3.3.1.2)
+  const hoseStreamGpm = isOrdinary ? 250.0 : 100.0;
+  const totalSprinklerDemandGpm = parseFloat((sprinklerFlowGpm + hoseStreamGpm).toFixed(1));
+  const totalSprinklerDemandLpm = parseFloat((totalSprinklerDemandGpm * 3.78541).toFixed(1));
+
+  // 3. NFPA 14 Class I Wet Riser Standpipe
+  const standpipeFlowGpm = 500.0;
+  const standpipeFlowLpm = parseFloat((standpipeFlowGpm * 3.78541).toFixed(1));
+  const standpipeResidualPsi = 100.0;
+  const standpipeResidualBar = parseFloat((standpipeResidualPsi * 0.0689476).toFixed(2));
+  const standpipeResidualHeadM = parseFloat((standpipeResidualBar * 10.197).toFixed(1)); // ~70.3 m
+
+  // Elevation head & friction loss in 4" (DN100) Black Steel Schedule 40 riser
+  const elevationHeadM = parseFloat(buildingHeightM.toFixed(1));
+  const frictionLossHeadM = parseFloat(((buildingHeightM + 35.0) * 0.11).toFixed(1)); // ~5.2 m
+  const totalStandpipeHeadM = parseFloat((standpipeResidualHeadM + elevationHeadM + frictionLossHeadM).toFixed(1));
+  const totalStandpipeBar = parseFloat((totalStandpipeHeadM / 10.197).toFixed(2));
+
+  // 4. Combined Governing Fire Demand (NFPA 14 Section 7.10.1.3)
+  const governingFlowGpm = Math.max(standpipeFlowGpm, totalSprinklerDemandGpm);
+  const governingFlowLpm = parseFloat((governingFlowGpm * 3.78541).toFixed(1));
+  const governingHeadM = totalStandpipeHeadM;
+  const governingHeadBar = totalStandpipeBar;
+
+  // 5. NFPA 20 Fire Booster Pump Sizing
+  const pumpEfficiency = 0.72;
+  const flowM3s = (governingFlowGpm * 3.78541) / (60.0 * 1000.0);
+  const hydraulicPowerW = (1000.0 * 9.80665 * flowM3s * governingHeadM) / pumpEfficiency;
+  const hydraulicPowerKw = parseFloat((hydraulicPowerW / 1000.0).toFixed(1));
+  const brakeHorsepowerHp = parseFloat((hydraulicPowerKw / 0.7457).toFixed(1));
+
+  const standardHpSteps = [15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 75.0, 100.0];
+  const motorHp = standardHpSteps.find(h => h >= brakeHorsepowerHp) || 60.0;
+  const motorKw = parseFloat((motorHp * 0.7457).toFixed(1));
+
+  // Jockey Pump
+  const jockeyFlowGpm = Math.max(10.0, parseFloat((governingFlowGpm * 0.015).toFixed(1)));
+  const jockeyFlowLpm = parseFloat((jockeyFlowGpm * 3.78541).toFixed(1));
+  const jockeyMotorHp = 3.0;
+
+  // 6. NFPA 22 Dedicated Fire Water Storage Tank (45 min duration)
+  const durationMin = isOrdinary ? 45.0 : 30.0;
+  const tankCapacityGal = Math.round(governingFlowGpm * durationMin);
+  const tankCapacityM3 = parseFloat((tankCapacityGal * 0.00378541).toFixed(1));
+  const tankFootprintSqm = parseFloat((tankCapacityM3 / 3.0).toFixed(1)); // 3m depth
+
+  return {
+    hazardClass: isOrdinary ? 'Ordinary Hazard Group 1' : 'Light Hazard (Residential/Office)',
+    governingFlowGpm,
+    governingFlowLpm,
+    governingHeadM,
+    governingHeadBar,
+    sprinkler: {
+      kFactor,
+      minResidualPsi,
+      singleHeadFlowGpm,
+      singleHeadFlowLpm,
+      designDensityGpmSqft: designDensity,
+      operatingHeadsCount,
+      totalSprinklersCount,
+      sprinklerFlowGpm,
+      sprinklerFlowLpm,
+      hoseStreamGpm,
+      totalSprinklerDemandGpm,
+      totalSprinklerDemandLpm,
+      mainRiserDiaMm: 100,
+      crossMainDiaMm: 65,
+      branchDiaMm: 32
+    },
+    standpipe: {
+      class: 'Class I (Fire Brigade 2.5" Hose Connection)',
+      flowGpm: standpipeFlowGpm,
+      flowLpm: standpipeFlowLpm,
+      minResidualPsi: standpipeResidualPsi,
+      minResidualBar: standpipeResidualBar,
+      elevationHeadM,
+      frictionLossHeadM,
+      totalHeadM: totalStandpipeHeadM,
+      totalHeadBar: totalStandpipeBar,
+      pipeSpec: 'DN100 (4-inch) Schedule 40 Black Steel'
+    },
+    pump: {
+      hydraulicPowerKw,
+      brakeHorsepowerHp,
+      motorHp,
+      motorKw,
+      efficiency: 72,
+      jockeyFlowGpm,
+      jockeyFlowLpm,
+      jockeyMotorHp,
+      cutOutPressurePsi: parseFloat(((governingHeadBar * 14.5038) + 10.0).toFixed(1)),
+      cutInPressurePsi: parseFloat(((governingHeadBar * 14.5038) - 10.0).toFixed(1))
+    },
+    tank: {
+      durationMin,
+      capacityGal: tankCapacityGal,
+      capacityM3: tankCapacityM3,
+      footprintSqm: tankFootprintSqm,
+      effectiveDepthM: 3.0
+    },
+    standards: ['NFPA 13', 'NFPA 14', 'NFPA 20', 'NFPA 22', 'NBC 2016 Part 4']
+  };
+}

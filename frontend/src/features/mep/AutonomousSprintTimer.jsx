@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 10, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 11, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -259,11 +259,11 @@ export default function AutonomousSprintTimer({ currentCycle = 10, totalHours = 
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>STRUCTURAL & CLASH BIMS</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#A78BFA', marginTop: '2px' }}>
-                    M25 Concrete & 5x5 Clash Matrix
+                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>FIRE PROTECTION & LIFE SAFETY</div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#EF4444', marginTop: '2px' }}>
+                    NFPA 13/14 Sprinkler & Riser
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 139/139 Tests Passing</div>
+                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 500 GPM & 86m TDH Pump</div>
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>

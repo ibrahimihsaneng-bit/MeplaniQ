@@ -20,6 +20,7 @@ import {
 
   calculateDrainageSlopesAndClearance,
   calculateShortCircuitFaultCurrents,
+  calculateFireProtectionHydraulics,
 
   getRoomGeometry,
 
@@ -252,6 +253,17 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
 
   }, [plumbingData]);
 
+  // Compute NFPA 13/14 Fire Protection & Life Safety Hydraulics
+  const fireData = useMemo(() => {
+    let totalAreaSqm = 0;
+    (solveData?.rooms || []).forEach(r => {
+      const geom = getRoomGeometry(r);
+      totalAreaSqm += geom.areaSqm;
+    });
+    if (totalAreaSqm === 0) totalAreaSqm = 240.0;
+    return calculateFireProtectionHydraulics(totalAreaSqm, 12.0, 'light_hazard');
+  }, [solveData]);
+
   // Compute BOQ and Embodied Carbon
 
   const boqData = useMemo(() => {
@@ -374,6 +386,19 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
 
       csvContent += `Plenum Clearance Margin,${drainageClearanceData?.clearanceMarginMm} mm (${drainageClearanceData?.status})\n`;
 
+    } else if (activeTab === 'fire') {
+      csvContent += `MEPLANIQ FIRE PROTECTION & LIFE SAFETY HYDRAULIC SIZING SHEET - ${projectName} (${ts})\n`;
+      csvContent += `Governing Standards,NFPA 13 • NFPA 14 • NFPA 20 • NFPA 22 • NBC 2016\n`;
+      csvContent += `Occupancy Hazard Classification,${fireData?.hazardClass}\n`;
+      csvContent += `Governing Fire Water Demand,${fireData?.governingFlowGpm} GPM (${fireData?.governingFlowLpm} LPM)\n`;
+      csvContent += `Fire Booster Pump TDH,${fireData?.governingHeadM} m (${fireData?.governingHeadBar} bar)\n`;
+      csvContent += `Fire Pump Electric Drive Motor,${fireData?.pump?.motorHp} HP (${fireData?.pump?.motorKw} kW)\n`;
+      csvContent += `Jockey Pressure Maintenance Pump,${fireData?.pump?.jockeyFlowGpm} GPM @ ${fireData?.pump?.jockeyMotorHp} HP\n`;
+      csvContent += `Dedicated Fire Water Storage Tank,${fireData?.tank?.capacityGal} Gallons (${fireData?.tank?.capacityM3} m3)\n`;
+      csvContent += `Sprinkler Discharge Formula,Q = K * sqrt(P) [K=5.6, P=7.0 PSI -> ${fireData?.sprinkler?.singleHeadFlowGpm} GPM]\n`;
+      csvContent += `Sprinkler Remote Operating Heads,${fireData?.sprinkler?.operatingHeadsCount} heads over 1500 sqft\n`;
+      csvContent += `Total Building Sprinkler Estimate,${fireData?.sprinkler?.totalSprinklersCount} pendant heads\n`;
+      csvContent += `Class I Wet Riser Standpipe Flow,${fireData?.standpipe?.flowGpm} GPM @ 100 PSI residual\n`;
     } else if (activeTab === 'boq') {
 
       csvContent += `MEPLANIQ BILL OF QUANTITIES (BOQ) & EMBODIED CARBON DOSSIER - ${projectName} (${ts})\n`;
@@ -2790,6 +2815,255 @@ export default function MepCalculationModal({ isOpen, onClose, solveData, projec
 
             </div>
 
+          )}
+
+          {/* TAB 3.5: FIRE PROTECTION & LIFE SAFETY HYDRAULICS (NFPA 13 / NFPA 14) */}
+          {activeTab === 'fire' && fireData && (
+            <div>
+              {/* Summary KPIs */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '12px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Governing Fire Demand</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#EF4444', marginTop: '4px' }}>
+                    {fireData.governingFlowGpm} <span style={{ fontSize: '11px', color: '#64748B' }}>GPM</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
+                    {fireData.governingFlowLpm} LPM • Class I Standpipe Governs
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Fire Booster Pump TDH</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#FCD34D', marginTop: '4px' }}>
+                    {fireData.governingHeadM} <span style={{ fontSize: '11px', color: '#64748B' }}>m Head</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
+                    {fireData.governingHeadBar} bar (100 PSI Residual + Elevation)
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Main Fire Pump Motor</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#10B981', marginTop: '4px' }}>
+                    {fireData.pump.motorHp} <span style={{ fontSize: '11px', color: '#64748B' }}>HP</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
+                    {fireData.pump.motorKw} kW 415V 3PH (NFPA 20 Electric Drive)
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>Dedicated Storage Tank</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#38BDF8', marginTop: '4px' }}>
+                    {fireData.tank.capacityM3} <span style={{ fontSize: '11px', color: '#64748B' }}>m³</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
+                    {fireData.tank.capacityGal.toLocaleString()} Gal ({fireData.tank.durationMin} min NFPA 22 Duration)
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid 2-Column: Sprinkler Hydraulics & Standpipe Wet Riser */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '20px' }}>
+                {/* NFPA 13 Automatic Sprinkler System Card */}
+                <div style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #1E293B',
+                  borderRadius: '8px',
+                  padding: '16px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>
+                        💦 NFPA 13 Automatic Sprinkler Hydraulics
+                      </h4>
+                      <span style={{ fontSize: '10px', color: '#94A3B8' }}>
+                        Discharge Formula Q = K·√P • K=5.6 Orifice (1/2" NPT)
+                      </span>
+                    </div>
+                    <span style={{
+                      backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                      color: '#38BDF8',
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: 700
+                    }}>
+                      NFPA 13 LIGHT HAZARD
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11.5px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Remote Head Discharge (P=7.0 PSI):</span>
+                      <strong style={{ color: '#FCD34D' }}>{fireData.sprinkler.singleHeadFlowGpm} GPM ({fireData.sprinkler.singleHeadFlowLpm} LPM)</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Design Density & Remote Area:</span>
+                      <strong style={{ color: '#F1F5F9' }}>{fireData.sprinkler.designDensityGpmSqft} GPM/sqft over 1500 sqft</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Simultaneous Operating Heads:</span>
+                      <strong style={{ color: '#38BDF8' }}>{fireData.sprinkler.operatingHeadsCount} heads (Remote Area)</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Total Building Sprinklers Estimated:</span>
+                      <strong style={{ color: '#10B981' }}>{fireData.sprinkler.totalSprinklersCount} pendant heads</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Sprinkler Flow + Hose Allowance:</span>
+                      <strong style={{ color: '#EF4444' }}>{fireData.sprinkler.totalSprinklerDemandGpm} GPM ({fireData.sprinkler.totalSprinklerDemandLpm} LPM)</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Piping Sizing Schedule:</span>
+                      <strong style={{ color: '#E2E8F0', fontFamily: 'monospace' }}>DN100 Riser / DN65 Cross / DN32 Branch</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* NFPA 14 Class I Wet Riser Standpipe Card */}
+                <div style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #1E293B',
+                  borderRadius: '8px',
+                  padding: '16px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#F8FAFC' }}>
+                        🚒 NFPA 14 Wet Riser Standpipe System
+                      </h4>
+                      <span style={{ fontSize: '10px', color: '#94A3B8' }}>
+                        Class I Fire Brigade Landing Valves (2.5" / 65mm Outlets)
+                      </span>
+                    </div>
+                    <span style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                      color: '#F87171',
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: 700
+                    }}>
+                      CLASS I STANDPIPE
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11.5px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Primary Riser Design Flow:</span>
+                      <strong style={{ color: '#FCD34D' }}>{fireData.standpipe.flowGpm} GPM ({fireData.standpipe.flowLpm} LPM)</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Top Landing Valve Residual:</span>
+                      <strong style={{ color: '#10B981' }}>{fireData.standpipe.minResidualPsi} PSI ({fireData.standpipe.minResidualBar} bar / {fireData.standpipe.minResidualHeadM}m)</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Static Elevation Head:</span>
+                      <strong style={{ color: '#F1F5F9' }}>+{fireData.standpipe.elevationHeadM} m head</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Friction Loss in Sch 40 Riser:</span>
+                      <strong style={{ color: '#F1F5F9' }}>+{fireData.standpipe.frictionLossHeadM} m head (C=120)</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Total Standpipe Dynamic Head:</span>
+                      <strong style={{ color: '#EF4444' }}>{fireData.standpipe.totalHeadM} m ({fireData.standpipe.totalHeadBar} bar)</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#0A0F1D', borderRadius: '4px' }}>
+                      <span style={{ color: '#94A3B8' }}>Riser Pipe Specification:</span>
+                      <strong style={{ color: '#E2E8F0', fontFamily: 'monospace' }}>{fireData.standpipe.pipeSpec}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* NFPA 20 Fire Pump Set & NFPA 22 Water Storage Reservoir */}
+              <div style={{
+                backgroundColor: '#0F172A',
+                border: '1px solid #1E293B',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#F8FAFC' }}>
+                      ⚙️ NFPA 20 Fire Booster Pump Station & NFPA 22 Dedicated Reservoir
+                    </h4>
+                    <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                      Primary Electric Fire Pump • Standby Diesel Engine Pump (100% Redundancy) • Jockey Pressure Maintenance
+                    </span>
+                  </div>
+                  <span style={{
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    color: '#34D399',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    fontSize: '10px',
+                    fontWeight: 700
+                  }}>
+                    UL LISTED / FM APPROVED
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                  <div style={{ backgroundColor: '#0A0F1D', border: '1px solid #1E293B', borderRadius: '6px', padding: '12px' }}>
+                    <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600 }}>PRIMARY FIRE BOOSTER PUMP</div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#F8FAFC', marginTop: '4px' }}>
+                      End-Suction / Split-Case Centrifugal
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#CBD5E1', marginTop: '6px' }}>
+                      Flow: <strong>{fireData.governingFlowGpm} GPM</strong> @ <strong>{fireData.governingHeadM}m Head</strong>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#10B981', marginTop: '2px' }}>
+                      Motor: <strong>{fireData.pump.motorHp} HP ({fireData.pump.motorKw} kW)</strong> 415V 3PH
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#64748B', marginTop: '4px' }}>
+                      Hydraulic Power: {fireData.pump.hydraulicPowerKw} kW (η=72%)
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: '#0A0F1D', border: '1px solid #1E293B', borderRadius: '6px', padding: '12px' }}>
+                    <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600 }}>JOCKEY PRESSURE PUMP</div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#38BDF8', marginTop: '4px' }}>
+                      Vertical Multistage In-Line
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#CBD5E1', marginTop: '6px' }}>
+                      Flow: <strong>{fireData.pump.jockeyFlowGpm} GPM</strong> ({fireData.pump.jockeyFlowLpm} LPM)
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#38BDF8', marginTop: '2px' }}>
+                      Motor: <strong>{fireData.pump.jockeyMotorHp} HP (2.2 kW)</strong>
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#64748B', marginTop: '4px' }}>
+                      Cut-In: {fireData.pump.cutInPressurePsi} PSI • Cut-Out: {fireData.pump.cutOutPressurePsi} PSI
+                    </div>
+                  </div>
+
+                  <div style={{ backgroundColor: '#0A0F1D', border: '1px solid #1E293B', borderRadius: '6px', padding: '12px' }}>
+                    <div style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600 }}>NFPA 22 WATER RESERVOIR</div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#FCD34D', marginTop: '4px' }}>
+                      Dedicated Static Sump
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#CBD5E1', marginTop: '6px' }}>
+                      Capacity: <strong>{fireData.tank.capacityM3} m³</strong> ({fireData.tank.capacityGal.toLocaleString()} Gal)
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#FCD34D', marginTop: '2px' }}>
+                      Duration: <strong>{fireData.tank.durationMin} minutes</strong> sustained flow
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#64748B', marginTop: '4px' }}>
+                      Footprint: {fireData.tank.footprintSqm} m² @ {fireData.tank.effectiveDepthM}m effective depth
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* TAB 4: BILL OF QUANTITIES & EMBODIED CARBON */}
