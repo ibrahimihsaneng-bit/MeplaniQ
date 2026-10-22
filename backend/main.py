@@ -956,3 +956,27 @@ def drainage_slope_clearance_endpoint(payload: Dict[str, Any] = Body(...)):
 
 
 
+
+
+@app.post("/api/electrical/short-circuit-analysis")
+def short_circuit_analysis_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Computes prospective short-circuit fault currents (I_k''), peak asymmetrical currents (i_p),
+    loop impedances, and protective breaker breaking capacity (I_cu / I_cn) per IEC 60909-0.
+    """
+    from backend.electrical.short_circuit import analyze_building_electrical_network_faults
+    tx_kva = float(payload.get("transformer_kva", 160.0))
+    grid_mva = float(payload.get("utility_fault_mva", 250.0))
+    return analyze_building_electrical_network_faults(transformer_kva=tx_kva, utility_fault_mva=grid_mva)
+
+
+@app.get("/api/projects/{project_id}/electrical-fault-analysis")
+def project_electrical_fault_analysis_endpoint(project_id: str, transformer_kva: float = 160.0):
+    """
+    Executes an IEC 60909-0 short-circuit study for an existing project by ID.
+    """
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    from backend.electrical.short_circuit import analyze_building_electrical_network_faults
+    return analyze_building_electrical_network_faults(transformer_kva=transformer_kva)

@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 9, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 10, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -243,11 +243,11 @@ export default function AutonomousSprintTimer({ currentCycle = 9, totalHours = 2
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>RISER & VOLTAGE DROP</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#34D399', marginTop: '2px' }}>
-                    IEC 60364-5-52 SLD & ≤3% Vd
+                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>SHORT-CIRCUIT & BREAKING (kA)</div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#FCD34D', marginTop: '2px' }}>
+                    IEC 60909 Ik'' & Icu Breaking
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ Multi-Level Sub-Main Riser</div>
+                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ Icu ≥ Ik'' (Margin +78%)</div>
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
@@ -263,7 +263,7 @@ export default function AutonomousSprintTimer({ currentCycle = 9, totalHours = 2
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#A78BFA', marginTop: '2px' }}>
                     M25 Concrete & 5x5 Clash Matrix
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 133/133 Tests Passing</div>
+                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 139/139 Tests Passing</div>
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>

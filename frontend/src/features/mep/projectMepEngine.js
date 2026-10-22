@@ -1833,3 +1833,139 @@ export function autoResolveClashes(solveData) {
     clashes_resolved_count: resolvedCount
   };
 }
+
+
+/**
+ * IEC 60909-0 & IEEE 141 Red Book Short-Circuit Fault Current Analysis.
+ * Computes symmetrical initial short-circuit current (Ik''), peak asymmetrical dynamic current (ip),
+ * and verifies protective breaker breaking capacity (Icu/Icn) across the distribution hierarchy.
+ */
+export function calculateShortCircuitFaultCurrents(transformerKva = 160.0, utilityFaultMva = 250.0) {
+  const uNom = 415.0; // 3-phase line voltage
+  const cFactor = 1.05; // Maximum voltage factor per IEC 60909
+  
+  // 1. Grid Source Impedance (Z_Q)
+  const sKqVa = utilityFaultMva * 1e6;
+  const zQ = (cFactor * Math.pow(uNom, 2)) / sKqVa;
+  const rQ = 0.1 * zQ;
+  const xQ = Math.sqrt(Math.max(0, Math.pow(zQ, 2) - Math.pow(rQ, 2)));
+
+  // 2. Transformer Impedance (Z_T, 160 kVA, 4% uk)
+  const ratedVa = transformerKva * 1000.0;
+  const uk = 0.04;
+  const zT = uk * Math.pow(uNom, 2) / ratedVa;
+  const pKrT = 0.015 * ratedVa; // Copper load losses ~1.5%
+  const rT = pKrT * Math.pow(uNom, 2) / Math.pow(ratedVa, 2);
+  const xT = Math.sqrt(Math.max(0, Math.pow(zT, 2) - Math.pow(rT, 2)));
+
+  // Helper for cable impedance: Copper at 20°C (rho = 0.017241)
+  const calcCable = (lengthM, crossSectionMm2) => {
+    const r = (0.017241 * lengthM) / crossSectionMm2;
+    const x = (0.08 / 1000.0) * lengthM;
+    return { r, x };
+  };
+
+  // Helper for fault point calculation
+  const calcPoint = (name, rCum, xCum, breakerRatingA, breakerType, ratedIcuKa, isThreePhase = true, cableMm2 = 25.0) => {
+    const zK = Math.hypot(rCum, xCum);
+    const rOverX = xCum > 0 ? (rCum / xCum) : 1.0;
+    const kappa = parseFloat((1.02 + 0.98 * Math.exp(-3.0 * rOverX)).toFixed(3));
+    
+    let ikAmps = 0;
+    if (isThreePhase) {
+      ikAmps = (cFactor * uNom) / (Math.sqrt(3.0) * zK);
+    } else {
+      const uPhase = uNom / Math.sqrt(3.0);
+      ikAmps = (cFactor * uPhase) / zK;
+    }
+    const ikKa = parseFloat((ikAmps / 1000.0).toFixed(2));
+    const ipKa = parseFloat((kappa * Math.SQRT2 * ikKa).toFixed(2));
+    const isAdequate = ratedIcuKa >= ikKa;
+    const marginPercent = parseFloat((((ratedIcuKa - ikKa) / ratedIcuKa) * 100.0).toFixed(1));
+
+    // Adiabatic withstand: k = 115, t = 0.04s
+    const withstandKa = parseFloat(((115.0 * cableMm2 / Math.sqrt(0.04)) / 1000.0).toFixed(2));
+    const isThermalSafe = withstandKa >= ikKa;
+
+    return {
+      name,
+      isThreePhase,
+      rKMo: parseFloat((rCum * 1000.0).toFixed(2)),
+      xKMo: parseFloat((xCum * 1000.0).toFixed(2)),
+      zKMo: parseFloat((zK * 1000.0).toFixed(2)),
+      rOverX: parseFloat(rOverX.toFixed(3)),
+      kappa,
+      ikKa,
+      ipKa,
+      breakerType,
+      breakerRatingA,
+      ratedIcuKa,
+      isAdequate,
+      marginPercent,
+      cableMm2,
+      withstandKa,
+      isThermalSafe,
+      status: (isAdequate && isThermalSafe) ? 'COMPLIANT' : 'HAZARD'
+    };
+  };
+
+  // Compute Hierarchy Nodes
+  let r = rQ + rT;
+  let x = xQ + xT;
+
+  const nodeTx = calcPoint('TX-01 Secondary Bushings', r, x, 250, 'ACB Incomer', 50.0, true, 120.0);
+
+  // MDB-01: 12m of 70mm²
+  const cMdb = calcCable(12.0, 70.0);
+  r += cMdb.r;
+  x += cMdb.x;
+  const nodeMdb = calcPoint('MDB-01 Main Incomer Busbar', r, x, 200, 'MCCB 4P', 25.0, true, 70.0);
+
+  // SMDB-01: 25m of 25mm²
+  const cSmdb = calcCable(25.0, 25.0);
+  const rSmdb = r + cSmdb.r;
+  const xSmdb = x + cSmdb.x;
+  const nodeSmdb = calcPoint('SMDB-01 Floor Sub-Main Board', rSmdb, xSmdb, 63, 'MCCB 4P', 16.0, true, 25.0);
+
+  // DB-L1-PWR: 15m of 10mm²
+  const cDbPwr = calcCable(15.0, 10.0);
+  const rDbPwr = rSmdb + cDbPwr.r;
+  const xDbPwr = xSmdb + cDbPwr.x;
+  const nodeDbPwr = calcPoint('DB-L1-PWR Distribution Board', rDbPwr, xDbPwr, 40, 'MCB / ELCB', 10.0, true, 10.0);
+
+  // DB-L1-LGT: 18m of 6mm²
+  const cDbLgt = calcCable(18.0, 6.0);
+  const rDbLgt = rSmdb + cDbLgt.r;
+  const xDbLgt = xSmdb + cDbLgt.x;
+  const nodeDbLgt = calcPoint('DB-L1-LGT Distribution Board', rDbLgt, xDbLgt, 32, 'MCB Incomer', 10.0, true, 6.0);
+
+  // Sockets: 20m of 2.5mm² (1-phase loop = 2 * cable)
+  const cSock = calcCable(20.0, 2.5);
+  const rSock = rDbPwr + (2.0 * cSock.r);
+  const xSock = xDbPwr + (2.0 * cSock.x);
+  const nodeSockets = calcPoint('Final Sockets (Kitchen / Power)', rSock, xSock, 16, 'MCB Type C', 6.0, false, 2.5);
+
+  // Lighting: 25m of 1.5mm² (1-phase loop = 2 * cable)
+  const cLgt = calcCable(25.0, 1.5);
+  const rLgt = rDbLgt + (2.0 * cLgt.r);
+  const xLgt = xDbLgt + (2.0 * cLgt.x);
+  const nodeLighting = calcPoint('Final Lighting (Luminaires)', rLgt, xLgt, 10, 'MCB Type B', 6.0, false, 1.5);
+
+  const nodes = [nodeTx, nodeMdb, nodeSmdb, nodeDbPwr, nodeDbLgt, nodeSockets, nodeLighting];
+  const maxIkKa = Math.max(...nodes.map(n => n.ikKa));
+  const maxIpKa = Math.max(...nodes.map(n => n.ipKa));
+  const minMarginPercent = Math.min(...nodes.map(n => n.marginPercent));
+  const allCompliant = nodes.every(n => n.isAdequate && n.isThermalSafe);
+
+  return {
+    standard: 'IEC 60909-0:2016 / IEEE 141 (Red Book)',
+    transformerKva,
+    utilityFaultMva,
+    maxIkKa,
+    maxIpKa,
+    minMarginPercent,
+    allCompliant,
+    overallStatus: allCompliant ? 'IEC_COMPLIANT' : 'RUPTURE_WARNING',
+    nodes
+  };
+}
