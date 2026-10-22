@@ -995,11 +995,14 @@ export default function AutoCadPage() {
           containerRef={containerRef}
         />
 
-        {/* 3D Spatial BIM Axonometric Extrusion Viewport */}
+        {/* 3D Spatial BIM WebGL Extrusion Viewport */}
         {is3DViewActive && (
           <AutoCad3DViewport
             entities={entities}
             detectedRooms={detectedRooms}
+            onDeleteEntity={(id) => {
+              deleteEntities([id]);
+            }}
             onClose={() => setIs3DViewActive(false)}
           />
         )}

@@ -11,7 +11,12 @@ export default function AutoCadEngineeringPanel({
   detectedRooms = [],
   onClose
 }) {
-  const [activeTab, setActiveTab] = useState('summary'); // 'summary' | 'compliance' | 'hvac' | 'electrical' | 'plumbing' | 'boq'
+  const [activeTab, setActiveTab] = useState('summary'); // 'summary' | 'compliance' | 'hvac' | 'acoustics' | 'electrical' | 'plumbing' | 'boq'
+  const [acousticSpaceType, setAcousticSpaceType] = useState('private_office');
+  const [acousticAirflowCfm, setAcousticAirflowCfm] = useState(1200);
+  const [acousticStaticPress, setAcousticStaticPress] = useState(1.2);
+  const [acousticHasSilencer, setAcousticHasSilencer] = useState(true);
+  const [acousticHasLining, setAcousticHasLining] = useState(true);
 
   // 1. EXTRACT ARCHITECTURAL ENTITIES
   const walls = useMemo(() => entities.filter(e => e.type === 'wall' && e.centerline), [entities]);
@@ -176,6 +181,87 @@ export default function AutoCadEngineeringPanel({
   }, [blocks]);
 
   // BOQ Material Quantities & Cost
+  // HVAC Acoustic Sound Attenuation & Room Noise Criteria (ASHRAE Fundamentals Ch 8)
+  const acousticData = useMemo(() => {
+    const spaceTargets = {
+      private_office: { nc: 30, dba: 35, name: 'Executive & Private Offices' },
+      conference_room: { nc: 25, dba: 30, name: 'Conference & Telepresence Rooms' },
+      open_office: { nc: 35, dba: 40, name: 'Open-Plan Workstations' },
+      bedroom: { nc: 25, dba: 30, name: 'Residential Bedrooms & Hotels' },
+      classroom: { nc: 30, dba: 35, name: 'Classrooms & Training Centers' },
+      auditorium: { nc: 25, dba: 30, name: 'Auditoriums & Music Halls' },
+      hospital_patient_room: { nc: 30, dba: 35, name: 'Hospital Patient Rooms' },
+      retail_store: { nc: 40, dba: 45, name: 'Retail Stores & Supermarkets' },
+      corridor: { nc: 45, dba: 50, name: 'Corridors & Lobbies' }
+    };
+    const target = spaceTargets[acousticSpaceType] || spaceTargets.private_office;
+
+    const freqs = [63, 125, 250, 500, 1000, 2000, 4000, 8000];
+    const kw = [40, 42, 40, 37, 34, 30, 26, 22];
+    const aWeight = [-26.2, -16.1, -8.6, -3.2, 0.0, 1.2, 1.0, -1.1];
+    const silencerIL = acousticHasSilencer ? [4, 8, 16, 24, 28, 22, 16, 12] : [0, 0, 0, 0, 0, 0, 0, 0];
+    const ductLossPerM = acousticHasLining 
+      ? [0.6, 1.2, 3.5, 6.5, 8.5, 7.0, 5.5, 4.0]
+      : [0.1, 0.1, 0.15, 0.15, 0.2, 0.2, 0.25, 0.3];
+    const ductLen = 10.0;
+    const endLoss = [10, 6, 2.5, 1, 0, 0, 0, 0];
+    const baseLw = 10 * Math.log10(Math.max(50, acousticAirflowCfm)) + 20 * Math.log10(Math.max(0.1, acousticStaticPress));
+
+    const rows = freqs.map((f, idx) => {
+      const fanLw = Math.round(baseLw + kw[idx]);
+      const ductAtt = Math.round(ductLen * ductLossPerM[idx]);
+      const silencer = silencerIL[idx];
+      const endRef = endLoss[idx];
+      const elbow = 3;
+      const branchLoss = 3;
+      const totLoss = ductAtt + silencer + endRef + elbow + branchLoss;
+      const diffLw = Math.max(0, fanLw - totLoss);
+      const roomLoss = 11;
+      const lp = Math.max(0, diffLw - roomLoss);
+      const lpa = Math.round((lp + aWeight[idx]) * 10) / 10;
+      return { freq: f, fanLw, ductAtt, silencer, diffLw, lp, lpa };
+    });
+
+    const ncCurves = {
+      'NC-20': [51, 40, 33, 26, 22, 19, 17, 16],
+      'NC-25': [54, 44, 37, 31, 27, 24, 22, 21],
+      'NC-30': [57, 48, 41, 35, 31, 29, 28, 27],
+      'NC-35': [60, 52, 45, 40, 36, 34, 33, 32],
+      'NC-40': [64, 56, 50, 45, 41, 39, 38, 37],
+      'NC-45': [67, 60, 54, 49, 46, 44, 43, 42],
+      'NC-50': [71, 64, 58, 54, 51, 49, 48, 47]
+    };
+    let evalNC = 20;
+    for (const [ncName, curve] of Object.entries(ncCurves)) {
+      const val = parseInt(ncName.replace('NC-', ''));
+      let pass = true;
+      for (let i = 0; i < freqs.length; i++) {
+        if (rows[i].lp > curve[i]) {
+          pass = false;
+          break;
+        }
+      }
+      if (pass) {
+        evalNC = val;
+        break;
+      } else {
+        evalNC = val + 5;
+      }
+    }
+
+    const sumEnergy = rows.reduce((s, r) => s + Math.pow(10, r.lpa / 10), 0);
+    const overallDba = Math.round(10 * Math.log10(Math.max(1, sumEnergy)) * 10) / 10;
+    const isCompliant = (evalNC <= target.nc) && (overallDba <= target.dba);
+
+    return {
+      target,
+      rows,
+      evalNC,
+      overallDba,
+      isCompliant
+    };
+  }, [acousticSpaceType, acousticAirflowCfm, acousticStaticPress, acousticHasSilencer, acousticHasLining]);
+
   const boqData = useMemo(() => {
     const wallHeight = 3.0; // m
     const avgThickness = 0.20; // 200mm
@@ -370,6 +456,7 @@ export default function AutoCadEngineeringPanel({
           { id: 'summary', label: '📊 KPI Summary' },
           { id: 'compliance', label: '📐 Compliance' },
           { id: 'hvac', label: '❄️ HVAC Load' },
+          { id: 'acoustics', label: '🔊 HVAC Acoustics' },
           { id: 'electrical', label: '⚡ Electrical' },
           { id: 'plumbing', label: '🚿 Plumbing' },
           { id: 'boq', label: '📑 BOQ' }
@@ -571,6 +658,145 @@ export default function AutoCadEngineeringPanel({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* TAB: HVAC ACOUSTIC ATTENUATION & NOISE CRITERIA (ASHRAE CH 8) */}
+        {activeTab === 'acoustics' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ fontSize: '11px', color: '#94A3B8' }}>
+              Standard: <strong>ASHRAE Fundamentals Chapter 8 (Sound & Vibration) / AHRI 885</strong>
+            </div>
+
+            {/* Space Type & Controls Card */}
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', fontSize: '11px' }}>
+                <div>
+                  <label style={{ color: '#94A3B8', display: 'block', marginBottom: '4px' }}>Target Space Function:</label>
+                  <select
+                    value={acousticSpaceType}
+                    onChange={(e) => setAcousticSpaceType(e.target.value)}
+                    style={{ width: '100%', background: '#0F172A', border: '1px solid #475569', color: '#F8FAFC', borderRadius: '4px', padding: '5px' }}
+                  >
+                    <option value="private_office">Private Executive Office (NC-30 / 35 dBA)</option>
+                    <option value="conference_room">Conference Room (NC-25 / 30 dBA)</option>
+                    <option value="open_office">Open-Plan Workstations (NC-35 / 40 dBA)</option>
+                    <option value="bedroom">Residential Bedroom (NC-25 / 30 dBA)</option>
+                    <option value="classroom">Classroom / Training (NC-30 / 35 dBA)</option>
+                    <option value="auditorium">Auditorium / Hall (NC-25 / 30 dBA)</option>
+                    <option value="hospital_patient_room">Hospital Patient Room (NC-30 / 35 dBA)</option>
+                    <option value="retail_store">Retail / Commercial (NC-40 / 45 dBA)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ color: '#94A3B8', display: 'block', marginBottom: '4px' }}>Airflow & Static Pressure:</label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input
+                      type="number"
+                      value={acousticAirflowCfm}
+                      onChange={(e) => setAcousticAirflowCfm(Number(e.target.value))}
+                      style={{ width: '55%', background: '#0F172A', border: '1px solid #475569', color: '#F8FAFC', borderRadius: '4px', padding: '5px' }}
+                      title="Airflow in CFM"
+                    />
+                    <span style={{ fontSize: '10px', color: '#64748B', alignSelf: 'center' }}>CFM</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={acousticStaticPress}
+                      onChange={(e) => setAcousticStaticPress(Number(e.target.value))}
+                      style={{ width: '45%', background: '#0F172A', border: '1px solid #475569', color: '#F8FAFC', borderRadius: '4px', padding: '5px' }}
+                      title="Static Pressure in. wg"
+                    />
+                    <span style={{ fontSize: '10px', color: '#64748B', alignSelf: 'center' }}>in.wg</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Remediation Toggles */}
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #334155' }}>
+                <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: acousticHasSilencer ? '#38BDF8' : '#94A3B8' }}>
+                  <input
+                    type="checkbox"
+                    checked={acousticHasSilencer}
+                    onChange={(e) => setAcousticHasSilencer(e.target.checked)}
+                  />
+                  <span>Dissipative Silencer (1.5m)</span>
+                </label>
+                <label style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: acousticHasLining ? '#38BDF8' : '#94A3B8' }}>
+                  <input
+                    type="checkbox"
+                    checked={acousticHasLining}
+                    onChange={(e) => setAcousticHasLining(e.target.checked)}
+                  />
+                  <span>25mm Internal Acoustic Lining</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Compliance Results Banner */}
+            <div style={{
+              background: acousticData.isCompliant ? 'rgba(6, 78, 59, 0.4)' : 'rgba(127, 29, 29, 0.4)',
+              border: `1px solid ${acousticData.isCompliant ? '#10B981' : '#EF4444'}`,
+              borderRadius: '8px',
+              padding: '12px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: acousticData.isCompliant ? '#34D399' : '#F87171' }}>
+                  {acousticData.isCompliant ? '✅ ACOUSTIC COMPLIANT' : '⚠️ REMEDIATION REQUIRED'}
+                </div>
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                  Space: <strong>{acousticData.target.name}</strong> • Target: <strong>NC-{acousticData.target.nc} / {acousticData.target.dba} dBA</strong>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '16px', fontWeight: 900, color: acousticData.isCompliant ? '#38BDF8' : '#F87171' }}>
+                  NC-{acousticData.evalNC}
+                </div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#E2E8F0' }}>
+                  {acousticData.overallDba} dBA
+                </div>
+              </div>
+            </div>
+
+            {/* 8-Octave Band Attenuation Spectrum Table */}
+            <div style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: '8px', padding: '10px', overflowX: 'auto' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#60A5FA', marginBottom: '8px' }}>
+                Octave-Band Sound Power & Insertion Loss Spectrum (dB re 10⁻¹² W)
+              </div>
+              <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse', textAlign: 'center' }}>
+                <thead>
+                  <tr style={{ background: '#0F172A', color: '#94A3B8', borderBottom: '1px solid #334155' }}>
+                    <th style={{ padding: '6px', textAlign: 'left' }}>Freq (Hz)</th>
+                    {acousticData.rows.map(r => <th key={r.freq} style={{ padding: '6px' }}>{r.freq}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid #334155', color: '#E2E8F0' }}>
+                    <td style={{ padding: '5px', textAlign: 'left', color: '#F97316' }}>Fan Lw (dB)</td>
+                    {acousticData.rows.map(r => <td key={r.freq} style={{ padding: '5px' }}>{r.fanLw}</td>)}
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+                    <td style={{ padding: '5px', textAlign: 'left', color: '#38BDF8' }}>Duct Loss (dB)</td>
+                    {acousticData.rows.map(r => <td key={r.freq} style={{ padding: '5px' }}>-{r.ductAtt}</td>)}
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #334155', color: '#94A3B8' }}>
+                    <td style={{ padding: '5px', textAlign: 'left', color: '#A855F7' }}>Silencer IL (dB)</td>
+                    {acousticData.rows.map(r => <td key={r.freq} style={{ padding: '5px' }}>-{r.silencer}</td>)}
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #334155', color: '#E2E8F0' }}>
+                    <td style={{ padding: '5px', textAlign: 'left', color: '#FACC15' }}>Diffuser Lw</td>
+                    {acousticData.rows.map(r => <td key={r.freq} style={{ padding: '5px' }}>{r.diffLw}</td>)}
+                  </tr>
+                  <tr style={{ background: '#0B0F19', fontWeight: 700, color: '#38BDF8' }}>
+                    <td style={{ padding: '6px', textAlign: 'left', color: '#34D399' }}>Receiver Lp (dB)</td>
+                    {acousticData.rows.map(r => <td key={r.freq} style={{ padding: '6px' }}>{r.lp}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

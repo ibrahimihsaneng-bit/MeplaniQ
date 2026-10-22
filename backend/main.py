@@ -1044,3 +1044,42 @@ def project_clash_resolution_report_endpoint(project_id: str):
         fire_pipes=cad_data.get("fire_pipes", []),
         columns=cad_data.get("structural_columns", [])
     )
+
+
+
+@app.post("/api/hvac/acoustic-analysis")
+def hvac_acoustic_analysis_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Executes HVAC Sound Attenuation & Room Noise Criteria (NC / dBA) analysis per ASHRAE Fundamentals Chapter 8.
+    """
+    from backend.acoustic_analyzer import DuctAcousticsRequest, perform_hvac_acoustic_analysis
+    req = DuctAcousticsRequest(**payload)
+    return perform_hvac_acoustic_analysis(req)
+
+
+@app.get("/api/projects/{project_id}/acoustic-analysis")
+def project_acoustic_analysis_endpoint(project_id: str, space_type: str = "private_office"):
+    """
+    Computes room acoustic sound pressure levels and NC rating for an existing project.
+    """
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    cad_data = proj.get("cad_json_data", {})
+    from backend.acoustic_analyzer import DuctAcousticsRequest, DuctSectionInput, perform_hvac_acoustic_analysis
+    ducts = cad_data.get("hvac_ducts", [])
+    sections = []
+    for d in ducts:
+        p1 = d.get("p1", [0, 0])
+        p2 = d.get("p2", [1000, 0])
+        import math
+        l_m = max(1.0, math.dist(p1, p2) / 1000.0)
+        sections.append(DuctSectionInput(length_m=l_m, is_internally_lined=True))
+    if not sections:
+        sections = [DuctSectionInput(length_m=8.0, is_internally_lined=True)]
+    req = DuctAcousticsRequest(
+        duct_sections=sections,
+        space_type=space_type,
+        has_duct_silencer=True
+    )
+    return perform_hvac_acoustic_analysis(req)

@@ -3035,6 +3035,9 @@ export default function EditorPage() {
           entities={cadEntities}
           detectedRooms={detectedRoomsMemo}
           solveData={solveData}
+          onDeleteEntity={(id) => {
+            console.log('3D Viewport deleted wall:', id);
+          }}
           onClose={() => setIs3DViewActive(false)}
         />
       )}
