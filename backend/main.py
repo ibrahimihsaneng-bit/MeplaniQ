@@ -1008,3 +1008,39 @@ def project_fire_protection_analysis_endpoint(project_id: str, hazard_class: str
     total_area = sum(float(r.get("area", 20.0)) for r in rooms) if rooms else 240.0
     from backend.fire_protection import analyze_building_fire_protection_system
     return analyze_building_fire_protection_system(floor_area_sqm=total_area, hazard_class=hazard_class)
+
+
+@app.post("/api/mep/resolve-clashes-3d")
+def resolve_mep_clashes_3d_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Performs 5-discipline 3D clash detection and generates autonomous bypass detours
+    across HVAC Ducts, Plumbing Pipes, Electrical Conduits, Fire Wet Risers, and Structural Columns.
+    """
+    from backend.clash_harmonizer import harmonize_mep_spatial_coordination
+    ducts = payload.get("hvac_ducts", [])
+    pipes = payload.get("plumbing_pipes", [])
+    elec = payload.get("electrical_routes", [])
+    fire = payload.get("fire_pipes", [])
+    cols = payload.get("structural_columns", [])
+    return harmonize_mep_spatial_coordination(
+        ducts=ducts, pipes=pipes, electrical_routes=elec, fire_pipes=fire, columns=cols
+    )
+
+
+@app.get("/api/projects/{project_id}/clash-resolution-report")
+def project_clash_resolution_report_endpoint(project_id: str):
+    """
+    Retrieves full 3D clash resolution report and bypass offsets for an existing project.
+    """
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    cad_data = proj.get("cad_json_data", {})
+    from backend.clash_harmonizer import harmonize_mep_spatial_coordination
+    return harmonize_mep_spatial_coordination(
+        ducts=cad_data.get("hvac_ducts", []),
+        pipes=cad_data.get("plumbing_pipes", []),
+        electrical_routes=cad_data.get("electrical_routes", []),
+        fire_pipes=cad_data.get("fire_pipes", []),
+        columns=cad_data.get("structural_columns", [])
+    )

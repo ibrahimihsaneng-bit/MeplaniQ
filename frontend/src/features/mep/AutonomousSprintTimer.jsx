@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 11, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 12, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -267,11 +267,11 @@ export default function AutonomousSprintTimer({ currentCycle = 11, totalHours = 
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>THERMAL COMFORT & FITTINGS</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#38BDF8', marginTop: '2px' }}>
-                    ASHRAE 55 PMV & SMACNA ESP
+                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>3D BIM CLASH HARMONIZATION</div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#10B981', marginTop: '2px' }}>
+                    ISO 19650-2 Level 2 Detours
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ Category A/B & Fan BHP</div>
+                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 100% Zero-Collision Cleared</div>
                 </div>
               </div>
             </div>

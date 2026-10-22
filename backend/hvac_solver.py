@@ -27,17 +27,17 @@ class HVACRoomLoad(BaseModel):
 
 class HVACEquipmentCAD(BaseModel):
     id: str
-    room_name: str
-    unit_type: str  # "Split-IDU", "ODU", "Cassette-IDU"
-    capacity_tr: float
-    cfm: float
-    x: float
-    y: float
-    width: float
-    height: float
+    room_name: str = "Central Utility"
+    unit_type: str = "Central-AHU"
+    capacity_tr: float = 1.5
+    cfm: float = 600.0
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 600.0
+    height: float = 900.0
     rotation_deg: float = 0.0
-    label_x: float
-    label_y: float
+    label_x: float = 0.0
+    label_y: float = 0.0
     status: str = "Active"
 
 

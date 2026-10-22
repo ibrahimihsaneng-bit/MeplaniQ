@@ -508,13 +508,17 @@ def generate_standard_ducted_hvac_and_structure(raw_rooms: List[Dict[str, Any]])
     ahu_equipment = {
         "id": "AHU-01",
         "name": f"AHU-01 ({total_cfm} CFM / {total_tr} TR)",
+        "room_name": "Central Utility Plant",
         "unit_type": "Central-AHU",
+        "capacity_tr": total_tr,
         "cooling_capacity_tr": total_tr,
         "cfm": total_cfm,
         "x": ahu_x,
         "y": spine_y,
         "location_x": ahu_x,
         "location_y": spine_y,
+        "label_x": ahu_x,
+        "label_y": spine_y + 450.0,
         "width": 600.0,
         "height": 900.0,
         "status": "Active"
