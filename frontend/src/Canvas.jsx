@@ -25,6 +25,16 @@ import {
   generateOrthogonalPath,
   calculatePipeMetrics
 } from './features/cad2d/pipeRoutingEngine';
+import {
+  HVAC_DUCT_SYSTEMS,
+  HVAC_DIFFUSER_TYPES,
+  calculateDuctVelocity,
+  computeDuctSegmentCorners,
+  formatPolygonPoints,
+  computeAirflowChevron,
+  findNearestDuct,
+  generateFlexDuctPath
+} from './features/cad2d/ductRoutingEngine';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1133,6 +1143,72 @@ export default function Canvas({
     setSnappedPort(null);
   }, [draftingState, pipeSystem, pipeDiameter, pipeSlope, plumbingPipes, solveData, onLiveItemUpdate]);
 
+  // ─── HVAC Ductwork & Diffuser State ──────────────────────────────────────
+  const [hvacToolMode, setHvacToolMode] = useState('duct'); // 'duct' | 'diffuser'
+  const [ductSystem, setDuctSystem] = useState('SUPPLY');
+  const [ductWidth, setDuctWidth] = useState(400);
+  const [ductHeight, setDuctHeight] = useState(250);
+  const [ductCfm, setDuctCfm] = useState(400);
+  const [diffuserType, setDiffuserType] = useState('SUPPLY_4WAY');
+  const [diffuserCfm, setDiffuserCfm] = useState(150);
+  const [nearestDuctTakeoff, setNearestDuctTakeoff] = useState(null);
+
+  const handleDuctSystemChange = useCallback((sysId) => {
+    setDuctSystem(sysId);
+    const spec = HVAC_DUCT_SYSTEMS[sysId] || HVAC_DUCT_SYSTEMS.SUPPLY;
+    if (spec.defaultSize) {
+      setDuctWidth(spec.defaultSize.width);
+      setDuctHeight(spec.defaultSize.height);
+    }
+    if (spec.defaultCfm) setDuctCfm(spec.defaultCfm);
+  }, []);
+
+  const handleDuctSizeChange = useCallback((w, h) => {
+    setDuctWidth(w);
+    setDuctHeight(h);
+  }, []);
+
+  const handleDiffuserTypeChange = useCallback((typeId) => {
+    setDiffuserType(typeId);
+    const spec = HVAC_DIFFUSER_TYPES[typeId] || HVAC_DIFFUSER_TYPES.SUPPLY_4WAY;
+    if (spec.defaultCfm) setDiffuserCfm(spec.defaultCfm);
+  }, []);
+
+  const handleFinishDuctRouting = useCallback(() => {
+    if (!draftingState.points || draftingState.points.length < 2) return;
+    const finalPoints = draftingState.points.map(p => [Math.round(p.x), Math.round(p.y)]);
+    const currentDuctSys = HVAC_DUCT_SYSTEMS[ductSystem] || HVAC_DUCT_SYSTEMS.SUPPLY;
+    const existingDucts = solveData?.hvac_ducts || [];
+    const dCount = existingDucts.length + 1;
+    const dId = `DUCT-${dCount}`;
+    const velMetrics = calculateDuctVelocity(ductCfm, ductWidth, ductHeight);
+
+    let totalLengthMm = 0;
+    for (let i = 0; i < finalPoints.length - 1; i++) {
+      totalLengthMm += Math.hypot(finalPoints[i + 1][0] - finalPoints[i][0], finalPoints[i + 1][1] - finalPoints[i][1]);
+    }
+
+    const newDuct = {
+      id: dId,
+      name: `${currentDuctSys.shortName} Duct ${dId}`,
+      system: ductSystem,
+      width: ductWidth,
+      height: ductHeight,
+      cfm: ductCfm,
+      velocity_fpm: velMetrics.velocityFpm,
+      velocity_status: velMetrics.status,
+      eq_diam_mm: velMetrics.eqDiamMm,
+      path: finalPoints,
+      p1: finalPoints[0],
+      p2: finalPoints[finalPoints.length - 1],
+      total_length_mm: Math.round(totalLengthMm),
+      label: `${ductWidth}x${ductHeight} (${ductCfm} CFM)`
+    };
+
+    onLiveItemUpdate?.('AddHvacDuct', null, newDuct);
+    setDraftingState({ active: false, tool: null, points: [], isNearStart: false, startPort: null });
+  }, [draftingState, ductSystem, ductWidth, ductHeight, ductCfm, solveData, onLiveItemUpdate]);
+
   const handleCloseRoomLoop = useCallback(() => {
     if (!draftingState.points || draftingState.points.length < 3) return;
     const pts = draftingState.points.map(p => [Math.round(p.x), Math.round(p.y)]);
@@ -1203,6 +1279,9 @@ export default function Canvas({
           const keys = ['CW', 'HW', 'DRAIN', 'VENT'];
           const nxt = (keys.indexOf(pipeSystem) + 1) % keys.length;
           handlePipeSystemChange(keys[nxt]);
+        } else if (activeTool === 'hvac') {
+          e.preventDefault();
+          setHvacToolMode(prev => prev === 'duct' ? 'diffuser' : 'duct');
         }
       } else if (e.key === 'c' || e.key === 'C') {
         if (draftingState.active && draftingState.tool === 'wall' && draftingState.points?.length >= 3) {
@@ -1213,6 +1292,9 @@ export default function Canvas({
         if (draftingState.active && draftingState.tool === 'pipe' && draftingState.points?.length >= 2) {
           e.preventDefault();
           handleFinishPipeRouting(snappedPort);
+        } else if (draftingState.active && draftingState.tool === 'duct' && draftingState.points?.length >= 2) {
+          e.preventDefault();
+          handleFinishDuctRouting();
         } else if (draftingState.active && draftingState.tool === 'wall' && draftingState.points?.length >= 2) {
           e.preventDefault();
           handleFinishWallChain();
@@ -1263,6 +1345,8 @@ export default function Canvas({
           if (type === "Furniture") onLiveItemUpdate?.("DeleteFurniture", id);
           else if (type === "PlumbingFixture") onLiveItemUpdate?.("DeletePlumbingFixture", id);
           else if (type === "PlumbingPipe") onLiveItemUpdate?.("DeletePlumbingPipe", id);
+          else if (type === "HvacDuct") onLiveItemUpdate?.("DeleteHvacDuct", id);
+          else if (type === "HvacDiffuser") onLiveItemUpdate?.("DeleteHvacDiffuser", id);
           else if (type === "ElectricalComponent" || type === "Electrical") onLiveItemUpdate?.("DeleteElectricalComponent", id);
           else if (type === "HVAC") onLiveItemUpdate?.("DeleteHVAC", id);
           else if (type === "Door" || type === "Window") onLiveItemUpdate?.("DeleteOpening", id);
@@ -1272,7 +1356,7 @@ export default function Canvas({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem, draftingState, handleCloseRoomLoop, handleFinishWallChain, handleFinishPipeRouting, handleCancelDrafting, showGrid, activeTool, pipeSystem, handlePipeSystemChange, snappedPort]);
+  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem, draftingState, handleCloseRoomLoop, handleFinishWallChain, handleFinishPipeRouting, handleFinishDuctRouting, handleCancelDrafting, showGrid, activeTool, pipeSystem, handlePipeSystemChange, snappedPort, hvacToolMode]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -1323,6 +1407,14 @@ export default function Canvas({
       setSnappedPort(null);
     }
 
+    // Check nearest duct for diffuser takeoff snap
+    if (activeTool === 'hvac' && hvacToolMode === 'diffuser') {
+      const ductHit = findNearestDuct(coords, solveData?.hvac_ducts || [], 1800 / zoom);
+      setNearestDuctTakeoff(ductHit);
+    } else if (nearestDuctTakeoff) {
+      setNearestDuctTakeoff(null);
+    }
+
     const snapResult = findNearestOsnap(coords, solveData, zoom, {
       enabled: osnapActive,
       activeStartPoint: lastDraftPt,
@@ -1334,7 +1426,7 @@ export default function Canvas({
     // Apply Snapped Port or OSNAP or Ortho
     let effectivePt = foundPort ? foundPort.point : (snapResult ? snapResult.point : coords);
     if (!foundPort && !snapResult && lastDraftPt) {
-      if (orthoActive || draftingState.tool === 'pipe') {
+      if (orthoActive || draftingState.tool === 'pipe' || draftingState.tool === 'duct') {
         effectivePt = applyOrthoConstraint(lastDraftPt, coords, e.shiftKey);
       } else if (polarActive) {
         effectivePt = applyPolarConstraint(lastDraftPt, coords, 45);
@@ -1510,6 +1602,63 @@ export default function Canvas({
             points: newPoints
           }));
         }
+      }
+      return;
+    }
+
+    // Interactive 2D HVAC Ductwork Routing & Diffuser Placement
+    if (activeTool === 'hvac' && e.button === 0) {
+      if (hvacToolMode === 'diffuser') {
+        const spec = HVAC_DIFFUSER_TYPES[diffuserType] || HVAC_DIFFUSER_TYPES.SUPPLY_4WAY;
+        const diffCount = (solveData?.hvac_diffusers || []).length + 1;
+        const diffId = `DIFF-${diffCount}`;
+        const targetPt = cadCursorPt || getSvgCoordinates(e);
+
+        const hostRoomObj = (solveData?.rooms || []).find(r => {
+          if (!r.points || r.points.length < 3) return false;
+          const xs = r.points.map(p => p[0]);
+          const ys = r.points.map(p => p[1]);
+          return targetPt.x >= Math.min(...xs) && targetPt.x <= Math.max(...xs) &&
+                 targetPt.y >= Math.min(...ys) && targetPt.y <= Math.max(...ys);
+        });
+
+        const newDiff = {
+          id: diffId,
+          type: diffuserType,
+          name: `${spec.name} ${diffId}`,
+          system: spec.system,
+          x: Math.round(targetPt.x),
+          y: Math.round(targetPt.y),
+          size: spec.size || 450,
+          neck_size: spec.neckSize || 250,
+          cfm: diffuserCfm || spec.defaultCfm,
+          throw_radius_mm: spec.throwRadiusMm || 3200,
+          host_room: hostRoomObj?.name || 'General Space',
+          connected_duct_id: nearestDuctTakeoff?.duct?.id || null,
+          takeoff_point: nearestDuctTakeoff?.projectedPoint ? [nearestDuctTakeoff.projectedPoint.x, nearestDuctTakeoff.projectedPoint.y] : null
+        };
+
+        onLiveItemUpdate?.('AddHvacDiffuser', null, newDiff);
+        return;
+      }
+
+      // HVAC Duct Routing
+      const targetPt = osnapPt ? osnapPt.point : cadCursorPt;
+
+      if (!draftingState.active || draftingState.tool !== 'duct') {
+        setDraftingState({
+          active: true,
+          tool: 'duct',
+          points: [targetPt]
+        });
+      } else {
+        const lastPt = draftingState.points[draftingState.points.length - 1];
+        const ortho = generateOrthogonalPath(lastPt, targetPt);
+        const newPoints = [...draftingState.points.slice(0, -1), ...ortho];
+        setDraftingState(prev => ({
+          ...prev,
+          points: newPoints
+        }));
       }
       return;
     }
@@ -3344,43 +3493,23 @@ export default function Canvas({
                 );
               })}
 
-              {/* Central Ducted HVAC Duct Segments (Supply / Return / Branch) */}
+              {/* Central Ducted HVAC Duct Segments & Continuous Routed Runs */}
               {(solveData?.hvac_ducts || []).map((duct, dIdx) => {
-                const p1 = duct.p1 || [0, 0];
-                const p2 = duct.p2 || [0, 0];
-                const dx = p2[0] - p1[0];
-                const dy = p2[1] - p1[1];
-                const len = Math.hypot(dx, dy);
-                if (len < 1) return null;
-                const nx = -dy / len;
-                const ny = dx / len;
+                const isDuctSelected = selectedItem?.item?.id === duct.id && selectedItem?.type === "HvacDuct";
+                const isTrunk = duct.system === 'SUPPLY';
+                const currentDuctSys = HVAC_DUCT_SYSTEMS[duct.system] || (isTrunk ? HVAC_DUCT_SYSTEMS.SUPPLY : HVAC_DUCT_SYSTEMS.RETURN);
+                const ductColor = currentDuctSys.color || '#F97316';
                 const halfW = (duct.width || 300) / 2;
-                const c1 = [p1[0] + nx * halfW, p1[1] + ny * halfW];
-                const c2 = [p2[0] + nx * halfW, p2[1] + ny * halfW];
-                const c3 = [p2[0] - nx * halfW, p2[1] - ny * halfW];
-                const c4 = [p1[0] - nx * halfW, p1[1] - ny * halfW];
-                const polyPoints = `${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${c3[0]},${c3[1]} ${c4[0]},${c4[1]}`;
+
+                // Handle multi-point polyline duct or 2-point segment
+                const rawPath = duct.path && Array.isArray(duct.path) && duct.path.length >= 2
+                  ? duct.path
+                  : [duct.p1 || [duct.x || 0, duct.y || 0], duct.p2 || [duct.end_x || (duct.x || 0) + 1000, duct.end_y || duct.y || 0]];
+
+                const p1 = rawPath[0];
+                const p2 = rawPath[rawPath.length - 1];
                 const midX = (p1[0] + p2[0]) / 2;
                 const midY = (p1[1] + p2[1]) / 2;
-                const isTrunk = duct.system === 'SUPPLY';
-                const ductColor = isTrunk ? '#F97316' : '#FB923C';
-
-                // Aerodynamic Airflow Direction Indicator Chevron (SMACNA Standard)
-                const ux = dx / len;
-                const uy = dy / len;
-                const arrowDist = Math.min(len * 0.75, Math.max(len * 0.25, len / 2));
-                const ax = p1[0] + ux * arrowDist;
-                const ay = p1[1] + uy * arrowDist;
-                const aLen = Math.min(120, len * 0.25);
-                const aWidth = Math.min(halfW * 0.6, 50);
-                const aLeftX = ax - ux * aLen - ny * aWidth;
-                const aLeftY = ay - uy * aLen + nx * aWidth;
-                const aRightX = ax - ux * aLen + ny * aWidth;
-                const aRightY = ay - uy * aLen - nx * aWidth;
-                const aInnerX = ax - ux * (aLen * 0.5);
-                const aInnerY = ay - uy * (aLen * 0.5);
-
-                const isDuctSelected = selectedItem?.item?.id === duct.id && selectedItem?.type === "HvacDuct";
 
                 return (
                   <g
@@ -3392,59 +3521,161 @@ export default function Canvas({
                     }}
                     style={{
                       cursor: "pointer",
-                      filter: isDuctSelected ? "drop-shadow(0px 0px 8px #F97316)" : "none"
+                      filter: isDuctSelected ? `drop-shadow(0px 0px 8px ${ductColor})` : "none"
                     }}
                   >
-                    <polygon
-                      points={polyPoints}
-                      fill={isDuctSelected ? "rgba(249, 115, 22, 0.35)" : (isTrunk ? "rgba(249, 115, 22, 0.16)" : "rgba(251, 146, 60, 0.12)")}
-                      stroke={isDuctSelected ? "#FFFFFF" : ductColor}
-                      strokeWidth={(isDuctSelected ? 3.5 : 2) / zoom}
-                      strokeLinejoin="miter"
-                    />
-                    <line
-                      x1={p1[0]}
-                      y1={p1[1]}
-                      x2={p2[0]}
-                      y2={p2[1]}
-                      stroke={ductColor}
-                      strokeWidth={1.2 / zoom}
-                      strokeDasharray={`${80 / zoom} ${40 / zoom}`}
-                    />
-                    {len > 350 && (
-                      <polygon
-                        points={`${ax},${ay} ${aLeftX},${aLeftY} ${aInnerX},${aInnerY} ${aRightX},${aRightY}`}
-                        fill={ductColor}
-                        opacity="0.8"
+                    {/* Render each segment along duct run */}
+                    {rawPath.map((pt, sIdx) => {
+                      if (sIdx === 0) return null;
+                      const prev = rawPath[sIdx - 1];
+                      const dx = pt[0] - prev[0];
+                      const dy = pt[1] - prev[1];
+                      const len = Math.hypot(dx, dy);
+                      if (len < 1) return null;
+
+                      const nx = -dy / len;
+                      const ny = dx / len;
+                      const c1 = [prev[0] + nx * halfW, prev[1] + ny * halfW];
+                      const c2 = [pt[0] + nx * halfW, pt[1] + ny * halfW];
+                      const c3 = [pt[0] - nx * halfW, pt[1] - ny * halfW];
+                      const c4 = [prev[0] - nx * halfW, prev[1] - ny * halfW];
+                      const polyPoints = `${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${c3[0]},${c3[1]} ${c4[0]},${c4[1]}`;
+
+                      // Aerodynamic Airflow Direction Indicator Chevron
+                      const ux = dx / len;
+                      const uy = dy / len;
+                      const arrowDist = Math.min(len * 0.75, Math.max(len * 0.25, len / 2));
+                      const ax = prev[0] + ux * arrowDist;
+                      const ay = prev[1] + uy * arrowDist;
+                      const aLen = Math.min(100, len * 0.25);
+                      const aWidth = Math.min(halfW * 0.6, 45);
+                      const aLeftX = ax - ux * aLen - ny * aWidth;
+                      const aLeftY = ay - uy * aLen + nx * aWidth;
+                      const aRightX = ax - ux * aLen + ny * aWidth;
+                      const aRightY = ay - uy * aLen - nx * aWidth;
+                      const aInnerX = ax - ux * (aLen * 0.5);
+                      const aInnerY = ay - uy * (aLen * 0.5);
+
+                      return (
+                        <g key={`duct-seg-${duct.id || dIdx}-${sIdx}`}>
+                          <polygon
+                            points={polyPoints}
+                            fill={isDuctSelected ? "rgba(249, 115, 22, 0.40)" : currentDuctSys.fillColor}
+                            stroke={isDuctSelected ? "#FFFFFF" : ductColor}
+                            strokeWidth={(isDuctSelected ? 3.5 : 2) / zoom}
+                            strokeLinejoin="miter"
+                          />
+                          <line
+                            x1={prev[0]}
+                            y1={prev[1]}
+                            x2={pt[0]}
+                            y2={pt[1]}
+                            stroke={ductColor}
+                            strokeWidth={1.2 / zoom}
+                            strokeDasharray={`${80 / zoom} ${40 / zoom}`}
+                          />
+                          {len > 300 && (
+                            <polygon
+                              points={`${ax},${ay} ${aLeftX},${aLeftY} ${aInnerX},${aInnerY} ${aRightX},${aRightY}`}
+                              fill={ductColor}
+                              opacity="0.85"
+                            />
+                          )}
+                        </g>
+                      );
+                    })}
+
+                    {/* Miter elbows at interior vertices */}
+                    {rawPath.slice(1, -1).map((pt, sIdx) => (
+                      <rect
+                        key={`duct-bend-${duct.id || dIdx}-${sIdx}`}
+                        x={pt[0] - halfW * 0.9}
+                        y={pt[1] - halfW * 0.9}
+                        width={halfW * 1.8}
+                        height={halfW * 1.8}
+                        fill={isDuctSelected ? "rgba(249, 115, 22, 0.45)" : currentDuctSys.fillColor}
+                        stroke={ductColor}
+                        strokeWidth={1.5 / zoom}
+                        strokeDasharray={`${6 / zoom} ${3 / zoom}`}
                       />
-                    )}
-                    {len > 550 && (
-                      <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
-                        <rect x="-85" y="-10" width="170" height="20" rx="4" fill="#0F172A" stroke={ductColor} strokeWidth="1" />
-                        <text x="0" y="3.5" textAnchor="middle" dominantBaseline="middle" fill="#FED7AA" fontSize="8" fontWeight="700">
-                          {duct.label || `${duct.width}x${duct.height} (${duct.cfm || 200} CFM)`}
-                        </text>
-                      </g>
-                    )}
+                    ))}
+
+                    {/* Duct Engineering Tag */}
+                    <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect x="-85" y="-10" width="170" height="20" rx="4" fill="#0F172A" stroke={ductColor} strokeWidth="1" />
+                      <text x="0" y="3.5" textAnchor="middle" dominantBaseline="middle" fill="#FED7AA" fontSize="8" fontWeight="700">
+                        {duct.label || `${duct.width}x${duct.height} (${duct.cfm || 400} CFM)`}
+                      </text>
+                    </g>
                   </g>
                 );
               })}
 
-              {/* 4-Way Ceiling Diffusers */}
+              {/* 4-Way Ceiling Diffusers & Terminal Grilles */}
               {(solveData?.hvac_diffusers || []).map((diff, dfIdx) => {
                 const s = diff.size || 450;
                 const hs = s / 2;
+                const isDiffSelected = selectedItem?.item?.id === diff.id && selectedItem?.type === "HvacDiffuser";
+                const diffColor = isDiffSelected ? "#FFFFFF" : "#0EA5E9";
+
                 return (
-                  <g key={`diff-${diff.id || dfIdx}`} className="cad-diffuser">
+                  <g
+                    key={`diff-${diff.id || dfIdx}`}
+                    className="cad-diffuser"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedItem({ type: "HvacDiffuser", item: diff });
+                    }}
+                    style={{
+                      cursor: "pointer",
+                      filter: isDiffSelected ? "drop-shadow(0px 0px 8px #0EA5E9)" : "none"
+                    }}
+                  >
+                    {/* Air Throw Coverage Circle (Rendered when selected or in HVAC view) */}
+                    {isDiffSelected && (
+                      <circle
+                        cx={diff.x}
+                        cy={diff.y}
+                        r={diff.throw_radius_mm || 3200}
+                        fill="rgba(14, 165, 233, 0.06)"
+                        stroke="#0EA5E9"
+                        strokeWidth={1.5 / zoom}
+                        strokeDasharray={`${60 / zoom} ${30 / zoom}`}
+                      />
+                    )}
+
+                    {/* S-Curved Flexible Duct Run from Takeoff Collar */}
+                    {diff.takeoff_point && (
+                      <g>
+                        <path
+                          d={generateFlexDuctPath({ x: diff.takeoff_point[0], y: diff.takeoff_point[1] }, { x: diff.x, y: diff.y })}
+                          fill="none"
+                          stroke="#38BDF8"
+                          strokeWidth={2 / zoom}
+                          strokeDasharray={`${10 / zoom} ${5 / zoom}`}
+                        />
+                        <circle
+                          cx={diff.takeoff_point[0]}
+                          cy={diff.takeoff_point[1]}
+                          r={8 / zoom}
+                          fill="#0284C7"
+                          stroke="#FFFFFF"
+                          strokeWidth={1.2 / zoom}
+                        />
+                      </g>
+                    )}
+
+                    {/* Diffuser Outer Frame */}
                     <rect
                       x={diff.x - hs}
                       y={diff.y - hs}
                       width={s}
                       height={s}
-                      fill="rgba(14, 165, 233, 0.25)"
-                      stroke="#0EA5E9"
-                      strokeWidth={2 / zoom}
+                      fill={isDiffSelected ? "rgba(14, 165, 233, 0.45)" : "rgba(14, 165, 233, 0.25)"}
+                      stroke={diffColor}
+                      strokeWidth={(isDiffSelected ? 2.8 : 2) / zoom}
                     />
+                    {/* Diffuser Inner Core */}
                     <rect
                       x={diff.x - hs * 0.5}
                       y={diff.y - hs * 0.5}
@@ -3454,10 +3685,13 @@ export default function Canvas({
                       stroke="#38BDF8"
                       strokeWidth={1.5 / zoom}
                     />
+                    {/* 4 Diagonal Deflector Vanes */}
                     <line x1={diff.x - hs} y1={diff.y - hs} x2={diff.x - hs * 0.5} y2={diff.y - hs * 0.5} stroke="#38BDF8" strokeWidth={1.2 / zoom} />
                     <line x1={diff.x + hs} y1={diff.y - hs} x2={diff.x + hs * 0.5} y2={diff.y - hs * 0.5} stroke="#38BDF8" strokeWidth={1.2 / zoom} />
                     <line x1={diff.x - hs} y1={diff.y + hs} x2={diff.x - hs * 0.5} y2={diff.y + hs * 0.5} stroke="#38BDF8" strokeWidth={1.2 / zoom} />
                     <line x1={diff.x + hs} y1={diff.y + hs} x2={diff.x + hs * 0.5} y2={diff.y + hs * 0.5} stroke="#38BDF8" strokeWidth={1.2 / zoom} />
+
+                    {/* Diffuser Tag */}
                     <g transform={`translate(${diff.x}, ${diff.y - hs - 70}) scale(${1 / zoom}, ${-1 / zoom})`}>
                       <rect x="-55" y="-8" width="110" height="16" rx="3" fill="#0F172A" stroke="#0EA5E9" strokeWidth="1" />
                       <text x="0" y="3" textAnchor="middle" dominantBaseline="middle" fill="#BAE6FD" fontSize="8.5" fontWeight="700">
@@ -4028,6 +4262,14 @@ export default function Canvas({
             pipeSystem={pipeSystem}
             pipeDiameter={pipeDiameter}
             pipeSlopeRatio={pipeSlope === '1:100' ? 0.01 : 0.02}
+            hvacToolMode={hvacToolMode}
+            ductSystem={ductSystem}
+            ductWidth={ductWidth}
+            ductHeight={ductHeight}
+            ductCfm={ductCfm}
+            diffuserType={diffuserType}
+            diffuserCfm={diffuserCfm}
+            nearestDuctTakeoff={nearestDuctTakeoff}
           />
         </g>
       </svg>
@@ -4308,6 +4550,64 @@ export default function Canvas({
             </div>
           )}
 
+          {selectedItem.type === "HvacDiffuser" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", backgroundColor: "#0F172A", padding: "8px", borderRadius: "6px", fontSize: "11px" }}>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Airflow:</span>
+                  <div style={{ color: "#38BDF8", fontWeight: 700 }}>{selectedItem.item.cfm || 150} CFM</div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Throw Radius:</span>
+                  <div style={{ color: "#34D399", fontWeight: 700 }}>
+                    {((selectedItem.item.throw_radius_mm || 3200) / 1000).toFixed(1)} m
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Face Size:</span>
+                  <div style={{ color: "#CBD5E1", fontWeight: 600 }}>{selectedItem.item.size || 450}×{selectedItem.item.size || 450} mm</div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Neck Size:</span>
+                  <div style={{ color: "#CBD5E1", fontWeight: 600 }}>⌀{selectedItem.item.neck_size || 250} mm</div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "11px", color: "#94A3B8", marginBottom: "4px" }}>
+                  Adjust Air Volume (CFM):
+                </label>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  {[100, 150, 200, 250, 350].map(cVal => (
+                    <button
+                      key={cVal}
+                      type="button"
+                      onClick={() => {
+                        if (onLiveItemUpdate) {
+                          onLiveItemUpdate("UpdateHvacDiffuser", selectedItem.item.id, { cfm: cVal });
+                        }
+                        setSelectedItem(prev => ({ ...prev, item: { ...prev.item, cfm: cVal } }));
+                      }}
+                      style={{
+                        flex: 1,
+                        backgroundColor: (selectedItem.item.cfm === cVal) ? "#0EA5E9" : "#1E293B",
+                        border: "1px solid #334155",
+                        color: "#FFFFFF",
+                        padding: "4px 2px",
+                        borderRadius: "4px",
+                        fontSize: "10px",
+                        cursor: "pointer",
+                        fontWeight: 600
+                      }}
+                    >
+                      {cVal}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {selectedItem.type === "PlumbingPipe" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", backgroundColor: "#0F172A", padding: "8px", borderRadius: "6px", fontSize: "11px" }}>
@@ -4366,6 +4666,8 @@ export default function Canvas({
                 if (type === "Furniture") onLiveItemUpdate?.("DeleteFurniture", id);
                 else if (type === "PlumbingFixture") onLiveItemUpdate?.("DeletePlumbingFixture", id);
                 else if (type === "PlumbingPipe") onLiveItemUpdate?.("DeletePlumbingPipe", id);
+                else if (type === "HvacDuct") onLiveItemUpdate?.("DeleteHvacDuct", id);
+                else if (type === "HvacDiffuser") onLiveItemUpdate?.("DeleteHvacDiffuser", id);
                 else if (type === "ElectricalComponent" || type === "Electrical") onLiveItemUpdate?.("DeleteElectricalComponent", id);
                 else if (type === "HVAC") onLiveItemUpdate?.("DeleteHVAC", id);
                 else if (type === "Door" || type === "Window") onLiveItemUpdate?.("DeleteOpening", id);
@@ -4594,7 +4896,11 @@ export default function Canvas({
         onToggleGrid={() => setInternalShowGrid(prev => !(prev ?? showGrid))}
         activeTool={activeTool}
         draftingPointsCount={draftingState.points?.length || 0}
-        onFinishDrafting={draftingState.tool === 'pipe' ? () => handleFinishPipeRouting(snappedPort) : handleFinishWallChain}
+        onFinishDrafting={
+          draftingState.tool === 'pipe'
+            ? () => handleFinishPipeRouting(snappedPort)
+            : (draftingState.tool === 'duct' ? handleFinishDuctRouting : handleFinishWallChain)
+        }
         onCancelDrafting={handleCancelDrafting}
         onCloseRoom={handleCloseRoomLoop}
         pipeSystem={pipeSystem}
@@ -4603,6 +4909,19 @@ export default function Canvas({
         onChangePipeDiameter={setPipeDiameter}
         pipeSlope={pipeSlope}
         onChangePipeSlope={setPipeSlope}
+        hvacToolMode={hvacToolMode}
+        onChangeHvacToolMode={setHvacToolMode}
+        ductSystem={ductSystem}
+        onChangeDuctSystem={handleDuctSystemChange}
+        ductWidth={ductWidth}
+        ductHeight={ductHeight}
+        onChangeDuctSize={handleDuctSizeChange}
+        ductCfm={ductCfm}
+        onChangeDuctCfm={setDuctCfm}
+        diffuserType={diffuserType}
+        onChangeDiffuserType={handleDiffuserTypeChange}
+        diffuserCfm={diffuserCfm}
+        onChangeDiffuserCfm={setDiffuserCfm}
       />
     </div>
   );

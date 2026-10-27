@@ -1,12 +1,13 @@
 import React from 'react';
 import { PLUMBING_SYSTEMS } from './pipeRoutingEngine';
+import { HVAC_DUCT_SYSTEMS, HVAC_DIFFUSER_TYPES, calculateDuctVelocity } from './ductRoutingEngine';
 
 /**
  * CadStatusBar.jsx
  * ================
  * Professional CAD Drafting Status Bar dock at the bottom of the 2D CAD canvas.
  * Provides live coordinate readouts, OSNAP/ORTHO status toggles, plumbing pipe selectors,
- * and contextual drafting shortcuts.
+ * HVAC duct & diffuser selectors, and contextual drafting shortcuts.
  */
 export default function CadStatusBar({
   cursorCoords = { x: 0, y: 0 },
@@ -29,10 +30,26 @@ export default function CadStatusBar({
   pipeDiameter = 25,
   onChangePipeDiameter,
   pipeSlope = '1:50',
-  onChangePipeSlope
+  onChangePipeSlope,
+  // HVAC System Selector Props
+  hvacToolMode = 'duct',
+  onChangeHvacToolMode,
+  ductSystem = 'SUPPLY',
+  onChangeDuctSystem,
+  ductWidth = 400,
+  ductHeight = 250,
+  onChangeDuctSize,
+  ductCfm = 400,
+  onChangeDuctCfm,
+  diffuserType = 'SUPPLY_4WAY',
+  onChangeDiffuserType,
+  diffuserCfm = 150,
+  onChangeDiffuserCfm
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
+  const currentDuctSys = HVAC_DUCT_SYSTEMS[ductSystem] || HVAC_DUCT_SYSTEMS.SUPPLY;
+  const velMetrics = calculateDuctVelocity(ductCfm, ductWidth, ductHeight);
 
   return (
     <div
@@ -110,6 +127,35 @@ export default function CadStatusBar({
               <>
                 <span style={{ color: '#06B6D4', fontWeight: 700 }}>🚰 PIPE ROUTER:</span>
                 <span>Click to start pipe route or snap directly to any fixture port.</span>
+              </>
+            )
+          )}
+
+          {activeTool === 'hvac' && (
+            hvacToolMode === 'duct' ? (
+              isDrafting ? (
+                <>
+                  <span style={{ color: currentDuctSys.color, fontWeight: 700 }}>
+                    ● ROUTING {currentDuctSys.shortName.toUpperCase()} DUCT ({ductWidth}x{ductHeight}mm):
+                  </span>
+                  <span>Click waypoint to bend 90° •</span>
+                  <span style={{ color: '#38BDF8' }}>[Enter]</span>
+                  <span>Finish •</span>
+                  <span style={{ color: '#EF4444' }}>[Esc]</span>
+                  <span>Cancel</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ color: '#F97316', fontWeight: 700 }}>💨 DUCT ROUTER:</span>
+                  <span>Click canvas to start trunk/branch duct route •</span>
+                  <span style={{ color: '#FDBA74' }}>[Tab]</span>
+                  <span>Switch to Diffuser Drop</span>
+                </>
+              )
+            ) : (
+              <>
+                <span style={{ color: '#0EA5E9', fontWeight: 700 }}>🎯 CEILING DIFFUSER TOOL:</span>
+                <span>Click inside room ceiling to place • Snaps flex duct takeoff to nearest duct</span>
               </>
             )
           )}
@@ -219,6 +265,189 @@ export default function CadStatusBar({
         </div>
       )}
 
+      {/* CENTER: Active HVAC System & Tool Quick Selector when activeTool === 'hvac' */}
+      {activeTool === 'hvac' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(30, 41, 59, 0.7)', padding: '2px 8px', borderRadius: '6px', border: '1px solid #334155' }}>
+          {/* Mode Toggle: Duct vs Diffuser */}
+          <div style={{ display: 'flex', backgroundColor: '#0F172A', borderRadius: '4px', padding: '1px', border: '1px solid #475569' }}>
+            <button
+              type="button"
+              onClick={() => onChangeHvacToolMode?.('duct')}
+              style={{
+                padding: '2px 8px',
+                borderRadius: '3px',
+                backgroundColor: hvacToolMode === 'duct' ? '#F97316' : 'transparent',
+                border: 'none',
+                color: hvacToolMode === 'duct' ? '#FFFFFF' : '#94A3B8',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              💨 Duct Route
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeHvacToolMode?.('diffuser')}
+              style={{
+                padding: '2px 8px',
+                borderRadius: '3px',
+                backgroundColor: hvacToolMode === 'diffuser' ? '#0EA5E9' : 'transparent',
+                border: 'none',
+                color: hvacToolMode === 'diffuser' ? '#FFFFFF' : '#94A3B8',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              🎯 Diffuser Drop
+            </button>
+          </div>
+
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#475569', margin: '0 2px' }} />
+
+          {hvacToolMode === 'duct' ? (
+            <>
+              {/* System Picker */}
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>SYS:</span>
+              {Object.values(HVAC_DUCT_SYSTEMS).map(sys => {
+                const isSelected = ductSystem === sys.id;
+                return (
+                  <button
+                    key={sys.id}
+                    type="button"
+                    onClick={() => onChangeDuctSystem?.(sys.id)}
+                    style={{
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: isSelected ? sys.color : 'transparent',
+                      border: isSelected ? 'none' : '1px solid #475569',
+                      color: isSelected ? '#FFFFFF' : '#CBD5E1',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                    title={sys.name}
+                  >
+                    {sys.shortName}
+                  </button>
+                );
+              })}
+
+              <div style={{ width: '1px', height: '14px', backgroundColor: '#475569', margin: '0 2px' }} />
+
+              {/* Size Picker */}
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>SIZE:</span>
+              <select
+                value={`${ductWidth}x${ductHeight}`}
+                onChange={(e) => {
+                  const [w, h] = e.target.value.split('x').map(Number);
+                  onChangeDuctSize?.(w, h);
+                }}
+                style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #475569',
+                  borderRadius: '4px',
+                  color: '#F8FAFC',
+                  fontSize: '10.5px',
+                  padding: '2px 4px',
+                  cursor: 'pointer'
+                }}
+              >
+                {currentDuctSys.sizes.map(s => (
+                  <option key={`${s.width}x${s.height}`} value={`${s.width}x${s.height}`}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+
+              {/* CFM Preset */}
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>CFM:</span>
+              <select
+                value={ductCfm}
+                onChange={(e) => onChangeDuctCfm?.(Number(e.target.value))}
+                style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #475569',
+                  borderRadius: '4px',
+                  color: '#FED7AA',
+                  fontSize: '10.5px',
+                  padding: '2px 4px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                {[150, 250, 400, 600, 800, 1200, 1600].map(c => (
+                  <option key={c} value={c}>{c} CFM</option>
+                ))}
+              </select>
+
+              {/* Velocity Indicator Pill */}
+              <span
+                style={{
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  backgroundColor: velMetrics.color + '22',
+                  border: `1px solid ${velMetrics.color}`,
+                  color: velMetrics.color,
+                  fontSize: '10px',
+                  fontWeight: 700
+                }}
+                title={velMetrics.label}
+              >
+                {velMetrics.velocityFpm} FPM
+              </span>
+            </>
+          ) : (
+            <>
+              {/* Diffuser Type Selector */}
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>TYPE:</span>
+              <select
+                value={diffuserType}
+                onChange={(e) => onChangeDiffuserType?.(e.target.value)}
+                style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #475569',
+                  borderRadius: '4px',
+                  color: '#38BDF8',
+                  fontSize: '10.5px',
+                  padding: '2px 4px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                {Object.values(HVAC_DIFFUSER_TYPES).map(dt => (
+                  <option key={dt.id} value={dt.id}>
+                    {dt.icon} {dt.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Diffuser CFM */}
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>AIRFLOW:</span>
+              <select
+                value={diffuserCfm}
+                onChange={(e) => onChangeDiffuserCfm?.(Number(e.target.value))}
+                style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #475569',
+                  borderRadius: '4px',
+                  color: '#BAE6FD',
+                  fontSize: '10.5px',
+                  padding: '2px 4px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                {[80, 120, 150, 200, 250, 350, 500].map(c => (
+                  <option key={c} value={c}>{c} CFM</option>
+                ))}
+              </select>
+            </>
+          )}
+        </div>
+      )}
+
       {/* RIGHT: Drafting Status Toggles & Action Buttons */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         {/* Active Drafting Action Controls */}
@@ -249,16 +478,16 @@ export default function CadStatusBar({
               style={{
                 padding: '3px 10px',
                 borderRadius: '4px',
-                backgroundColor: activeTool === 'plumbing' ? currentSys.color : '#1E293B',
-                border: `1px solid ${activeTool === 'plumbing' ? '#FFFFFF' : '#475569'}`,
+                backgroundColor: activeTool === 'hvac' ? currentDuctSys.color : (activeTool === 'plumbing' ? currentSys.color : '#1E293B'),
+                border: `1px solid ${activeTool === 'hvac' || activeTool === 'plumbing' ? '#FFFFFF' : '#475569'}`,
                 color: '#FFFFFF',
                 fontWeight: 700,
                 fontSize: '11px',
                 cursor: 'pointer'
               }}
-              title={activeTool === 'plumbing' ? "Commit and finalize pipe route" : "Finish current wall chain"}
+              title={activeTool === 'hvac' ? "Commit and finalize duct route" : (activeTool === 'plumbing' ? "Commit and finalize pipe route" : "Finish current wall chain")}
             >
-              {activeTool === 'plumbing' ? "✓ Finish Pipe (Enter)" : "Finish Wall (Enter)"}
+              {activeTool === 'hvac' ? "✓ Finish Duct (Enter)" : (activeTool === 'plumbing' ? "✓ Finish Pipe (Enter)" : "Finish Wall (Enter)")}
             </button>
             <button
               type="button"

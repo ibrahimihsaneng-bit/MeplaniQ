@@ -1300,6 +1300,62 @@ export default function EditorPage() {
         ...prev,
         plumbing_pipes: (prev.plumbing_pipes || []).filter(p => p.id !== itemId)
       } : prev);
+    } else if (itemType === "AddHvacDuct") {
+      let newId = updates.id;
+      if (!newId) {
+        let count = 1;
+        newId = `DUCT-${count}`;
+        while ((solveData?.hvac_ducts || []).some(d => d.id === newId)) {
+          count++;
+          newId = `DUCT-${count}`;
+        }
+      }
+      const newEntry = { ...updates, id: newId };
+      setSolveData(prev => prev ? {
+        ...prev,
+        hvac_ducts: [...(prev.hvac_ducts || []).filter(d => d.id !== newId), newEntry]
+      } : prev);
+      setIsDirty(true);
+    } else if (itemType === "UpdateHvacDuct") {
+      setSolveData(prev => prev ? {
+        ...prev,
+        hvac_ducts: (prev.hvac_ducts || []).map(d => d.id === itemId ? { ...d, ...updates } : d)
+      } : prev);
+      setIsDirty(true);
+    } else if (itemType === "DeleteHvacDuct") {
+      setSolveData(prev => prev ? {
+        ...prev,
+        hvac_ducts: (prev.hvac_ducts || []).filter(d => d.id !== itemId)
+      } : prev);
+      setIsDirty(true);
+    } else if (itemType === "AddHvacDiffuser") {
+      let newId = updates.id;
+      if (!newId) {
+        let count = 1;
+        newId = `DIFF-${count}`;
+        while ((solveData?.hvac_diffusers || []).some(d => d.id === newId)) {
+          count++;
+          newId = `DIFF-${count}`;
+        }
+      }
+      const newEntry = { ...updates, id: newId };
+      setSolveData(prev => prev ? {
+        ...prev,
+        hvac_diffusers: [...(prev.hvac_diffusers || []).filter(d => d.id !== newId), newEntry]
+      } : prev);
+      setIsDirty(true);
+    } else if (itemType === "UpdateHvacDiffuser") {
+      setSolveData(prev => prev ? {
+        ...prev,
+        hvac_diffusers: (prev.hvac_diffusers || []).map(d => d.id === itemId ? { ...d, ...updates } : d)
+      } : prev);
+      setIsDirty(true);
+    } else if (itemType === "DeleteHvacDiffuser") {
+      setSolveData(prev => prev ? {
+        ...prev,
+        hvac_diffusers: (prev.hvac_diffusers || []).filter(d => d.id !== itemId)
+      } : prev);
+      setIsDirty(true);
     } else if (itemType === "AddElectricalComponent") {
       let newId = updates?.id;
       if (!newId) {
@@ -2056,7 +2112,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={16} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={17} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}

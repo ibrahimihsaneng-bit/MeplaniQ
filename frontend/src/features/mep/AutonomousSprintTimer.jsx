@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 16, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 17, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -237,9 +237,21 @@ export default function AutonomousSprintTimer({ currentCycle = 16, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 16 (Hour 2): Interactive 2D Orthogonal Pipe Routing &amp; Fixture Port Snaps
+                      Cycle 17 (Hour 3): Interactive 2D HVAC Ductwork Routing &amp; Ceiling Diffuser Distribution
                     </span>
                     <span style={{ fontSize: '10px', color: '#34D399', fontWeight: 800 }}>LIVE</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                    Double-line SMACNA duct routing (Supply/Return/Exhaust/FA), live airflow CFM &amp; velocity FPM engineering HUD, 90° miter elbows, and ceiling diffuser drops with air throw radius rings &amp; flex duct snap takeoffs.
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
+                      Cycle 16 (Hour 2): Interactive 2D Orthogonal Pipe Routing &amp; Fixture Port Snaps
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>✓ COMPLETED</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
                     Multi-system pipe routing (CW, HW, DRAIN, VENT), magnetic fixture port connection snaps, 90° auto-elbows &amp; IPC 704 slope indicators.
@@ -261,24 +273,12 @@ export default function AutonomousSprintTimer({ currentCycle = 16, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #38BDF8' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 17 (Hour 3): Interactive HVAC Ductwork &amp; Diffuser Distribution
+                      Cycle 18 (Hour 4): Electrical Homeruns, Multi-Drop Conduit Routing &amp; Circuit Distribution
                     </span>
                     <span style={{ fontSize: '10px', color: '#38BDF8', fontWeight: 700 }}>NEXT HOUR</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
-                    Continuous rectangular &amp; round duct routing, auto-transitions, supply/return diffusers &amp; CFM air volume tags.
-                  </div>
-                </div>
-
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #64748B' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8' }}>
-                      Cycle 18 (Hour 4): Interactive HVAC Ductwork &amp; Diffuser Drops
-                    </span>
-                    <span style={{ fontSize: '10px', color: '#64748B' }}>PLANNED</span>
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
-                    Rectangular/round duct routing with automatic transitions &amp; ceiling diffuser drops.
+                    Auto-routing conduit pathways connecting light fixtures and receptacles directly back to distribution boards (DB), panel load balancing &amp; NEC voltage drop calculations.
                   </div>
                 </div>
 

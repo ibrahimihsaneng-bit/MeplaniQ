@@ -2,6 +2,15 @@ import React from 'react';
 import { OSNAP_TYPES } from './osnapEngine';
 import { formatCadLength, formatCadAngle } from './cadDrawingUtils';
 import { PLUMBING_SYSTEMS, generateOrthogonalPath, calculatePipeMetrics } from './pipeRoutingEngine';
+import {
+  HVAC_DUCT_SYSTEMS,
+  HVAC_DIFFUSER_TYPES,
+  calculateDuctVelocity,
+  computeDuctSegmentCorners,
+  formatPolygonPoints,
+  computeAirflowChevron,
+  generateFlexDuctPath
+} from './ductRoutingEngine';
 
 /**
  * CadCursorOverlay.jsx
@@ -9,6 +18,8 @@ import { PLUMBING_SYSTEMS, generateOrthogonalPath, calculatePipeMetrics } from '
  * Renders high-precision CAD drafting overlays directly inside the transformed SVG:
  *  - OSNAP Magnetic Glyphs (Square, Triangle, Perpendicular, Intersection)
  *  - Rubber-Band Wall & Pipe Drafting Polylines with 90° Orthogonal Elbows
+ *  - Interactive 2D HVAC Ductwork Rubber-Band (SMACNA Compliant Double-Line & Velocity HUD)
+ *  - Ceiling Diffuser Air Throw Radius & Flex Duct Takeoff Previews
  *  - Fixture Connection Port Magnetic Snapping Rings
  *  - Live Dynamic Pipe Length, Diameter, Fall & Slope HUD
  *  - Door / Window Live Wall-Hosting Previews
@@ -27,7 +38,16 @@ export default function CadCursorOverlay({
   snappedPort = null,
   pipeSystem = 'CW',
   pipeDiameter = 25,
-  pipeSlopeRatio = 0.02
+  pipeSlopeRatio = 0.02,
+  // HVAC Engine Props
+  hvacToolMode = 'duct',
+  ductSystem = 'SUPPLY',
+  ductWidth = 400,
+  ductHeight = 250,
+  ductCfm = 400,
+  diffuserType = 'SUPPLY_4WAY',
+  diffuserCfm = 150,
+  nearestDuctTakeoff = null
 }) {
   const glyphSize = 14 / zoom;
   const halfGlyph = glyphSize / 2;
@@ -436,6 +456,265 @@ export default function CadCursorOverlay({
                   <rect x="-70" y="-10" width="140" height="20" rx="4" fill="#0F172A" stroke="#0EA5E9" strokeWidth="1" />
                   <text x="0" y="4" textAnchor="middle" fill="#BAE6FD" fontSize="9" fontWeight="700">
                     WINDOW {w}mm [Click to Place]
+                  </text>
+                </g>
+              </>
+            );
+          })()}
+        </g>
+      )}
+
+      {/* 7. LIVE HVAC DUCTWORK ROUTING RUBBER-BAND */}
+      {draftingState?.active && draftingState.tool === 'duct' && draftingState.points?.length > 0 && cursorPt && (
+        <g id="DRAFTING_HVAC_DUCT_RUBBERBAND">
+          {(() => {
+            const currentDuctSys = HVAC_DUCT_SYSTEMS[ductSystem] || HVAC_DUCT_SYSTEMS.SUPPLY;
+            const ductColor = currentDuctSys.color;
+            const ductFill = currentDuctSys.fillColor;
+            const w = ductWidth || 400;
+            const h = ductHeight || 250;
+            const cfm = ductCfm || 400;
+            const velMetrics = calculateDuctVelocity(cfm, w, h);
+
+            const lastPt = draftingState.points[draftingState.points.length - 1];
+            const targetPt = cursorPt;
+            const orthoPath = generateOrthogonalPath(lastPt, targetPt);
+            const allPoints = [...draftingState.points.slice(0, -1), ...orthoPath];
+
+            // Calculate total duct path length
+            let totalLengthMm = 0;
+            for (let i = 0; i < allPoints.length - 1; i++) {
+              totalLengthMm += Math.hypot(allPoints[i + 1].x - allPoints[i].x, allPoints[i + 1].y - allPoints[i].y);
+            }
+
+            return (
+              <>
+                {/* 1. Established Multi-Segment Duct Bodies */}
+                {draftingState.points.map((pt, idx) => {
+                  if (idx === 0) return null;
+                  const prev = draftingState.points[idx - 1];
+                  const corners = computeDuctSegmentCorners(prev, pt, w);
+                  const chevron = computeAirflowChevron(prev, pt, w);
+                  if (!corners) return null;
+
+                  return (
+                    <g key={`fixed-duct-${idx}`}>
+                      <polygon
+                        points={formatPolygonPoints(corners)}
+                        fill={ductFill}
+                        stroke={ductColor}
+                        strokeWidth={2 / zoom}
+                        strokeLinejoin="miter"
+                      />
+                      <line
+                        x1={prev.x}
+                        y1={prev.y}
+                        x2={pt.x}
+                        y2={pt.y}
+                        stroke={ductColor}
+                        strokeWidth={1.2 / zoom}
+                        strokeDasharray={`${80 / zoom} ${40 / zoom}`}
+                      />
+                      {chevron && (
+                        <polygon points={chevron.pointsStr} fill={ductColor} opacity="0.8" />
+                      )}
+                    </g>
+                  );
+                })}
+
+                {/* 2. Active Stretching Orthogonal Duct Segments */}
+                {orthoPath.map((pt, idx) => {
+                  if (idx === 0) return null;
+                  const prev = orthoPath[idx - 1];
+                  const corners = computeDuctSegmentCorners(prev, pt, w);
+                  const chevron = computeAirflowChevron(prev, pt, w);
+                  if (!corners) return null;
+
+                  return (
+                    <g key={`ortho-duct-${idx}`}>
+                      <polygon
+                        points={formatPolygonPoints(corners)}
+                        fill={currentDuctSys.activeFillColor}
+                        stroke={ductColor}
+                        strokeWidth={2.2 / zoom}
+                        strokeDasharray={`${8 / zoom} ${4 / zoom}`}
+                        strokeLinejoin="miter"
+                      />
+                      <line
+                        x1={prev.x}
+                        y1={prev.y}
+                        x2={pt.x}
+                        y2={pt.y}
+                        stroke={ductColor}
+                        strokeWidth={1.2 / zoom}
+                        strokeDasharray={`${40 / zoom} ${20 / zoom}`}
+                      />
+                      {chevron && (
+                        <polygon points={chevron.pointsStr} fill={ductColor} opacity="0.9" />
+                      )}
+                    </g>
+                  );
+                })}
+
+                {/* 3. 90° Elbow Miter Bends at Waypoints */}
+                {allPoints.slice(1, -1).map((pt, idx) => (
+                  <rect
+                    key={`duct-elbow-${idx}`}
+                    x={pt.x - (w * 0.45)}
+                    y={pt.y - (w * 0.45)}
+                    width={w * 0.9}
+                    height={w * 0.9}
+                    fill={currentDuctSys.activeFillColor}
+                    stroke={ductColor}
+                    strokeWidth={1.5 / zoom}
+                    strokeDasharray={`${6 / zoom} ${3 / zoom}`}
+                  />
+                ))}
+
+                {/* 4. Live SMACNA / ASHRAE Duct Engineering HUD */}
+                {(() => {
+                  const midX = (lastPt.x + targetPt.x) / 2;
+                  const midY = (lastPt.y + targetPt.y) / 2;
+
+                  return (
+                    <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect
+                        x="-125"
+                        y="-18"
+                        width="250"
+                        height="36"
+                        rx="6"
+                        fill="rgba(15, 23, 42, 0.96)"
+                        stroke={ductColor}
+                        strokeWidth="1.6"
+                      />
+                      <text x="0" y="-4" textAnchor="middle" fill="#FFFFFF" fontSize="9.5" fontWeight="800">
+                        {currentDuctSys.icon} {currentDuctSys.shortName.toUpperCase()} {w}x{h} mm • {cfm} CFM
+                      </text>
+                      <text x="0" y="10" textAnchor="middle" fill={velMetrics.color} fontSize="8.5" fontWeight="700">
+                        ⚡ {velMetrics.velocityFpm} FPM • {velMetrics.status === 'OPTIMAL_BRANCH' ? 'Optimal Branch' : (velMetrics.status === 'OPTIMAL_TRUNK' ? 'Optimal Trunk' : 'Check Velocity')} • {formatCadLength(totalLengthMm)}
+                      </text>
+                    </g>
+                  );
+                })()}
+              </>
+            );
+          })()}
+        </g>
+      )}
+
+      {/* 8. CEILING DIFFUSER & AIR TERMINAL PLACEMENT PREVIEW */}
+      {activeTool === 'hvac' && hvacToolMode === 'diffuser' && cursorPt && (
+        <g id="HVAC_DIFFUSER_PREVIEW" transform={`translate(${cursorPt.x}, ${cursorPt.y})`}>
+          {(() => {
+            const spec = HVAC_DIFFUSER_TYPES[diffuserType] || HVAC_DIFFUSER_TYPES.SUPPLY_4WAY;
+            const color = spec.color || '#0EA5E9';
+            const s = spec.size || 450;
+            const hs = s / 2;
+            const throwR = spec.throwRadiusMm || 3200;
+            const cfm = diffuserCfm || spec.defaultCfm;
+
+            return (
+              <>
+                {/* 1. Air Throw Coverage Circle (Dashed SMACNA Throw Radius) */}
+                <circle
+                  cx="0"
+                  cy="0"
+                  r={throwR}
+                  fill={color}
+                  fillOpacity="0.04"
+                  stroke={color}
+                  strokeWidth={1.5 / zoom}
+                  strokeDasharray={`${80 / zoom} ${40 / zoom}`}
+                />
+
+                {/* 2. Optional Flex Duct Takeoff Snapping */}
+                {nearestDuctTakeoff && (
+                  <g transform={`translate(${-cursorPt.x}, ${-cursorPt.y})`}>
+                    <path
+                      d={generateFlexDuctPath(nearestDuctTakeoff.projectedPoint, cursorPt)}
+                      fill="none"
+                      stroke="#38BDF8"
+                      strokeWidth={2.5 / zoom}
+                      strokeDasharray={`${12 / zoom} ${6 / zoom}`}
+                    />
+                    {/* Takeoff collar at duct edge */}
+                    <circle
+                      cx={nearestDuctTakeoff.projectedPoint.x}
+                      cy={nearestDuctTakeoff.projectedPoint.y}
+                      r={10 / zoom}
+                      fill="#0EA5E9"
+                      stroke="#FFFFFF"
+                      strokeWidth={1.5 / zoom}
+                    />
+                    <g transform={`translate(${nearestDuctTakeoff.projectedPoint.x}, ${nearestDuctTakeoff.projectedPoint.y}) scale(${1 / zoom}, ${-1 / zoom}) translate(14, -8)`}>
+                      <rect x="0" y="0" width="105" height="18" rx="3" fill="#0F172A" stroke="#0EA5E9" strokeWidth="1" />
+                      <text x="6" y="12" fill="#BAE6FD" fontSize="8.5" fontWeight="700">
+                        ⚡ Duct Takeoff Collar
+                      </text>
+                    </g>
+                  </g>
+                )}
+
+                {/* 3. Diffuser Geometric Body Preview */}
+                {diffuserType === 'LINEAR_SLOT' ? (
+                  <g>
+                    <rect
+                      x={-600}
+                      y={-75}
+                      width={1200}
+                      height={150}
+                      fill="rgba(56, 189, 248, 0.25)"
+                      stroke={color}
+                      strokeWidth={2 / zoom}
+                    />
+                    <line x1={-580} y1={-25} x2={580} y2={-25} stroke={color} strokeWidth={1.2 / zoom} />
+                    <line x1={-580} y1={25} x2={580} y2={25} stroke={color} strokeWidth={1.2 / zoom} />
+                  </g>
+                ) : (
+                  <g>
+                    {/* Outer Square Frame */}
+                    <rect
+                      x={-hs}
+                      y={-hs}
+                      width={s}
+                      height={s}
+                      fill="rgba(14, 165, 233, 0.28)"
+                      stroke={color}
+                      strokeWidth={2.2 / zoom}
+                    />
+                    {/* Inner Square Frame */}
+                    <rect
+                      x={-hs * 0.5}
+                      y={-hs * 0.5}
+                      width={s * 0.5}
+                      height={s * 0.5}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth={1.6 / zoom}
+                    />
+                    {/* 4 Diagonal Blades / Louvers */}
+                    <line x1={-hs} y1={-hs} x2={-hs * 0.5} y2={-hs * 0.5} stroke={color} strokeWidth={1.4 / zoom} />
+                    <line x1={hs} y1={-hs} x2={hs * 0.5} y2={-hs * 0.5} stroke={color} strokeWidth={1.4 / zoom} />
+                    <line x1={-hs} y1={hs} x2={-hs * 0.5} y2={hs * 0.5} stroke={color} strokeWidth={1.4 / zoom} />
+                    <line x1={hs} y1={hs} x2={hs * 0.5} y2={hs * 0.5} stroke={color} strokeWidth={1.4 / zoom} />
+                  </g>
+                )}
+
+                {/* 4. Live Diffuser Engineering HUD Badge */}
+                <g transform={`scale(${1 / zoom}, ${-1 / zoom}) translate(0, ${-hs - 40})`}>
+                  <rect
+                    x="-90"
+                    y="-12"
+                    width="180"
+                    height="24"
+                    rx="5"
+                    fill="rgba(15, 23, 42, 0.95)"
+                    stroke={color}
+                    strokeWidth="1.5"
+                  />
+                  <text x="0" y="4" textAnchor="middle" fill="#FFFFFF" fontSize="9" fontWeight="700">
+                    {spec.icon} {spec.name} • {cfm} CFM
                   </text>
                 </g>
               </>
