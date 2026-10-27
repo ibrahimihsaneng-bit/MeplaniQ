@@ -45,6 +45,7 @@ import BoqDashboardModal from '../features/boq/BoqDashboardModal';
 import ValidationDrawer from '../components/ValidationDrawer';
 import { generateProjectCoordinatedMep, convertSolveDataToCadEntities, autoResolveClashes } from '../features/mep/projectMepEngine';
 import AutoMepModal from '../features/mep/AutoMepModal';
+import PlumbingEngineeringModal from '../features/mep/PlumbingEngineeringModal';
 import MepCalculationModal from '../features/mep/MepCalculationModal';
 import AutonomousSprintTimer from '../features/mep/AutonomousSprintTimer';
 import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
@@ -87,6 +88,7 @@ export default function EditorPage() {
 
   // Coordinated Auto-MEP & BIM Studio States
   const [isAutoMepModalOpen, setIsAutoMepModalOpen] = useState(false);
+  const [isPlumbingModalOpen, setIsPlumbingModalOpen] = useState(false);
   const [isCalcModalOpen, setIsCalcModalOpen] = useState(false);
   const [isClashDrawerOpen, setIsClashDrawerOpen] = useState(false);
   const [clashData, setClashData] = useState(null);
@@ -2054,7 +2056,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={12} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={14} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2260,6 +2262,31 @@ export default function EditorPage() {
             title="Open MEP Engineering Calculation Sheet (ASHRAE Duct Aerodynamics, 3-Phase DB Schedule, UPC Hydraulics, BOQ)"
           >
             <span>📐 Calc Sheet</span>
+          </button>
+
+          {/* 🚰 Advanced Plumbing & Hydraulics Suite */}
+          <button
+            onClick={() => setIsPlumbingModalOpen(true)}
+            disabled={!solveData}
+            style={{
+              background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+              border: '1px solid #38BDF8',
+              color: '#FFFFFF',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(2, 132, 199, 0.4)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Open Advanced Plumbing & Hydraulics Suite (IPC WSFU Sizing, Hunter's Curve, DFU Drainage, Booster Pumps & Solar PV)"
+          >
+            <span>🚰 Plumbing Suite</span>
           </button>
 
           {/* ⚡ Coordinated Auto-MEP Engine Trigger */}
@@ -2829,6 +2856,7 @@ export default function EditorPage() {
                   scaleModeFixed={scaleModeFixed}
                   isResizeModeActive={isResizeModeActive}
                   onLiveItemUpdate={handleLiveItemUpdate}
+                  onOpenPlumbingModal={() => setIsPlumbingModalOpen(true)}
                   onCursorMove={setCursorCoords}
                   viewTransform={viewTransform}
                   setViewTransform={setViewTransform}
@@ -2991,6 +3019,19 @@ export default function EditorPage() {
         onOpenTierSelector={() => {
           setIsTierSelectorOpen(true);
         }}
+      />
+
+      {/* Advanced Plumbing & Hydraulics Engineering Suite Modal */}
+      <PlumbingEngineeringModal
+        isOpen={isPlumbingModalOpen}
+        onClose={() => setIsPlumbingModalOpen(false)}
+        solveData={solveData}
+        plumbingFixtures={editablePlumbingFixtures.length > 0 ? editablePlumbingFixtures : (solveData?.plumbing_fixtures || [])}
+        plumbingPipes={editablePlumbingPipes.length > 0 ? editablePlumbingPipes : (solveData?.plumbing_pipes || [])}
+        rooms={solveData?.rooms || []}
+        onUpdateFixtures={(updated) => setEditablePlumbingFixtures(updated)}
+        onUpdatePipes={(updated) => setEditablePlumbingPipes(updated)}
+        onShowToast={(msg) => setToast({ message: msg, type: 'success' })}
       />
 
       {/* Auto-MEP Configuration Modal */}

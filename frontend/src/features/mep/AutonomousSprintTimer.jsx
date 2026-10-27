@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 12, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 14, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -54,17 +54,17 @@ export default function AutonomousSprintTimer({ currentCycle = 12, totalHours = 
 
   return (
     <>
-      {/* Third Item in Top Navbar: Live Autonomous Timer Pill */}
+      {/* Third Item in Top Navbar: Prominent Live Autonomous Timer Pill */}
       <div
         onClick={() => setIsModalOpen(true)}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: '6px',
-          padding: '2px 9px',
-          borderRadius: '4px',
-          backgroundColor: 'rgba(56, 189, 248, 0.1)',
-          border: '1px solid rgba(56, 189, 248, 0.35)',
+          gap: '8px',
+          padding: '3px 12px',
+          borderRadius: '20px',
+          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          border: '1.5px solid #10B981',
           color: '#38BDF8',
           fontSize: '11px',
           fontWeight: 700,
@@ -72,39 +72,43 @@ export default function AutonomousSprintTimer({ currentCycle = 12, totalHours = 
           whiteSpace: 'nowrap',
           flexShrink: 0,
           userSelect: 'none',
-          boxShadow: '0 0 10px rgba(56, 189, 248, 0.15)',
-          transition: 'all 0.15s ease'
+          boxShadow: '0 0 16px rgba(16, 185, 129, 0.35)',
+          transition: 'all 0.2s ease'
         }}
-        title="MeplanIQ 24h Autonomous Evolution Engine - Click to inspect live sprint schedule"
+        title="MeplanIQ 24h Autonomous Evolution Engine — Click to view live schedule & hourly roadmap"
       >
         <span style={{
-          width: '7px',
-          height: '7px',
+          width: '8px',
+          height: '8px',
           borderRadius: '50%',
           backgroundColor: '#10B981',
-          boxShadow: '0 0 8px #10B981',
+          boxShadow: '0 0 10px #10B981',
           display: 'inline-block',
-          animation: 'pulse 1.8s infinite'
+          animation: 'pulse 1.5s infinite'
         }} />
-        <span style={{ color: '#E2E8F0', fontWeight: 600 }}>⏱️ 24h Auto:</span>
+        <span style={{ color: '#E2E8F0', fontWeight: 700 }}>⏱️ TIMER:</span>
         <span style={{
           fontFamily: 'monospace',
-          fontSize: '11.5px',
-          fontWeight: 800,
-          color: '#38BDF8',
-          letterSpacing: '0.02em'
+          fontSize: '12px',
+          fontWeight: 900,
+          color: '#FACC15',
+          letterSpacing: '0.04em'
         }}>
           {timeFormatted}
         </span>
+        <span style={{ color: '#94A3B8', fontSize: '10px' }}>
+          (Cycle {currentCycle}/{totalHours}h)
+        </span>
         <span style={{
-          backgroundColor: 'rgba(16, 185, 129, 0.2)',
+          backgroundColor: '#065F46',
           color: '#34D399',
-          padding: '1px 5px',
-          borderRadius: '3px',
-          fontSize: '9.5px',
-          fontWeight: 800
+          padding: '2px 7px',
+          borderRadius: '10px',
+          fontSize: '10px',
+          fontWeight: 900,
+          letterSpacing: '0.04em'
         }}>
-          RUNNING
+          ● RUNNING
         </span>
       </div>
 
@@ -125,7 +129,7 @@ export default function AutonomousSprintTimer({ currentCycle = 12, totalHours = 
             backgroundColor: '#0F172A',
             border: '1px solid #334155',
             borderRadius: '12px',
-            width: '520px',
+            width: '560px',
             maxWidth: '92vw',
             color: '#F8FAFC',
             fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
@@ -169,7 +173,7 @@ export default function AutonomousSprintTimer({ currentCycle = 12, totalHours = 
             </div>
 
             {/* Modal Body */}
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto' }}>
               {/* Progress Tracker */}
               <div style={{ backgroundColor: '#1E293B', borderRadius: '8px', padding: '14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px' }}>
@@ -198,8 +202,8 @@ export default function AutonomousSprintTimer({ currentCycle = 12, totalHours = 
                 justifyContent: 'space-between'
               }}>
                 <div>
-                  <div style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600 }}>NEXT HOURLY RELEASE IN</div>
-                  <div style={{ fontSize: '24px', fontWeight: 800, color: '#38BDF8', fontFamily: 'monospace', marginTop: '2px' }}>
+                  <div style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600 }}>NEXT HOURLY AUTO-RELEASE IN</div>
+                  <div style={{ fontSize: '26px', fontWeight: 900, color: '#FACC15', fontFamily: 'monospace', marginTop: '2px' }}>
                     {timeFormatted}
                   </div>
                 </div>
@@ -208,70 +212,74 @@ export default function AutonomousSprintTimer({ currentCycle = 12, totalHours = 
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '5px',
-                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    backgroundColor: '#065F46',
                     color: '#34D399',
-                    padding: '3px 8px',
+                    padding: '4px 10px',
                     borderRadius: '12px',
                     fontSize: '11px',
-                    fontWeight: 700
+                    fontWeight: 800
                   }}>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981' }} />
-                    ACTIVE & DEPLOYING
+                    24H SPRINT ACTIVE
                   </div>
                   <div style={{ fontSize: '10px', color: '#64748B', marginTop: '4px' }}>
-                    Auto-sprint cycle every 60 min
+                    Auto-sprint cycle every 60 minutes
                   </div>
                 </div>
               </div>
 
-              {/* Active Subsystem Telemetry */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>CENTRAL DUCTED HVAC</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#F97316', marginTop: '2px' }}>
-                    ASHRAE 90.1 CFM & Equal Friction
-                  </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ Sized & Verified</div>
+              {/* Current Cycle Sprints */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: '#38BDF8' }}>
+                  🚀 SPRINT MILESTONE PROGRESSION:
                 </div>
 
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>ELECTRICAL DISTRIBUTION</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#FCD34D', marginTop: '2px' }}>
-                    3-Phase DB-01 Phase Balanced
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
+                      Cycle 14: Solar PV &amp; BESS + Advanced Plumbing Canvas Suite
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#34D399', fontWeight: 800 }}>LIVE</span>
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ R/Y/B Isolated Homeruns</div>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                    IEEE 1547 Rooftop Solar PV, LiFePO4 BESS Storage, IPC WSFU/DFU Canvas HUD &amp; NBC Booster Pumps.
+                  </div>
                 </div>
 
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>SHORT-CIRCUIT & BREAKING (kA)</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#FCD34D', marginTop: '2px' }}>
-                    IEC 60909 Ik'' & Icu Breaking
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
+                      Cycle 13: 3D WebGL Spatial BIM Viewport &amp; ASHRAE Acoustics
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>✓ COMPLETED</span>
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ Icu ≥ Ik'' (Margin +78%)</div>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                    Unrestricted 360° rotation, interactive wall deletion, 3D MEP pipelines, and ASHRAE Ch. 8 noise analysis.
+                  </div>
                 </div>
 
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>PLUMBING & DRAINAGE</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#38BDF8', marginTop: '2px' }}>
-                    Joukowsky Surge & UPC Invert Slope
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
+                      Cycle 12: 3D Multi-Discipline Clash Harmonizer
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>✓ COMPLETED</span>
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ PDI Size B & 1:40 Fall Clear</div>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                    ISO 19650-2 clash matrix &amp; autonomous vertical bypass detours.
+                  </div>
                 </div>
 
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>FIRE PROTECTION & LIFE SAFETY</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#EF4444', marginTop: '2px' }}>
-                    NFPA 13/14 Sprinkler & Riser
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #F59E0B' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
+                      Cycle 15: VRF Air-Conditioning &amp; Variable Refrigerant Flow Engine
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#F59E0B', fontWeight: 700 }}>NEXT HOUR</span>
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 500 GPM & 86m TDH Pump</div>
-                </div>
-
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', color: '#94A3B8' }}>3D BIM CLASH HARMONIZATION</div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#10B981', marginTop: '2px' }}>
-                    ISO 19650-2 Level 2 Detours
+                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                    Simultaneous heating/cooling heat recovery, branch selector boxes, and refrigerant piping lift limits.
                   </div>
-                  <div style={{ fontSize: '9px', color: '#10B981', marginTop: '2px' }}>✓ 100% Zero-Collision Cleared</div>
                 </div>
               </div>
             </div>
@@ -287,7 +295,7 @@ export default function AutonomousSprintTimer({ currentCycle = 12, totalHours = 
               fontSize: '11px',
               color: '#64748B'
             }}>
-              <span>MeplanIQ Autonomous Orchestrator</span>
+              <span>MeplanIQ Autonomous Orchestrator • 24h Continuous Operation</span>
               <button
                 onClick={() => setIsModalOpen(false)}
                 style={{

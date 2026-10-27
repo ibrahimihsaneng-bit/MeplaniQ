@@ -966,7 +966,8 @@ export default function Canvas({
   viewTransform, 
   setViewTransform,
   selectedItem: controlledSelectedItem,
-  onSelectItem
+  onSelectItem,
+  onOpenPlumbingModal
 }) {
   const svgRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -994,6 +995,28 @@ export default function Canvas({
     getDisciplineVisualState('electrical', disciplineView, disciplineDisplayMode),
     [disciplineView, disciplineDisplayMode]
   );
+
+  // On-Canvas Real-Time Plumbing & Hydraulics KPI Metrics
+  const canvasPlumbingKpi = useMemo(() => {
+    const activeFixtures = (plumbingFixtures && plumbingFixtures.length > 0)
+      ? plumbingFixtures
+      : (solveData?.plumbing_fixtures || []);
+    let wsfu = 0;
+    let dfu = 0;
+    activeFixtures.forEach(f => {
+      const t = (f.type || f.name || '').toLowerCase();
+      if (t.includes('wc') || t.includes('toilet')) { wsfu += 2.5; dfu += 4.0; }
+      else if (t.includes('basin') || t.includes('sink')) { wsfu += 1.0; dfu += 1.5; }
+      else if (t.includes('shower') || t.includes('tub')) { wsfu += 2.0; dfu += 2.0; }
+      else { wsfu += 1.5; dfu += 2.0; }
+    });
+    wsfu = Math.max(1.0, Math.round(wsfu * 10) / 10);
+    dfu = Math.max(1.0, Math.round(dfu * 10) / 10);
+    const flowLpm = Math.round(4.0 * Math.pow(wsfu, 0.55) * 3.78541 * 10) / 10;
+    const supplyDiam = flowLpm <= 25 ? 20 : (flowLpm <= 45 ? 25 : (flowLpm <= 80 ? 32 : 40));
+    const drainDiam = dfu <= 20 ? 75 : 110;
+    return { wsfu, dfu, flowLpm, supplyDiam, drainDiam, fixtureCount: activeFixtures.length };
+  }, [plumbingFixtures, solveData]);
 
   const activeDisciplineConfig = DISCIPLINE_CONFIG[disciplineView] || DISCIPLINE_CONFIG[DISCIPLINE_VIEWS.ALL];
   const setSelectedItem = useCallback((val) => {
@@ -3960,6 +3983,64 @@ export default function Canvas({
             <span style={{ fontSize: 10, color: "#64748B" }}>or press Del key</span>
           </div>
           <p style={{ fontSize: 11, color: "#64748B", margin: "10px 0 0 0" }}>Tip: Drag item or press Delete key to remove.</p>
+        </div>
+      )}
+
+      {/* Floating Plumbing & Hydraulics Engineering HUD on Canvas */}
+      {(disciplineView === DISCIPLINE_VIEWS.PLUMBING || activeTool === 'plumbing') && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            backgroundColor: 'rgba(15, 23, 42, 0.94)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid #00BFFF',
+            padding: '8px 18px',
+            borderRadius: '24px',
+            boxShadow: '0 8px 32px rgba(0, 191, 255, 0.25)',
+            zIndex: 30,
+            userSelect: 'none',
+            fontSize: '11px',
+            color: '#F8FAFC'
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, color: '#38BDF8' }}>
+            <span>🚰</span>
+            <span>IPC HYDRAULICS HUD</span>
+          </span>
+          <span style={{ color: '#94A3B8' }}>
+            Demand: <strong style={{ color: '#E0F2FE' }}>{canvasPlumbingKpi.wsfu} WSFU</strong> ({canvasPlumbingKpi.flowLpm} LPM)
+          </span>
+          <span style={{ color: '#94A3B8' }}>
+            Supply: <strong style={{ color: '#00BFFF' }}>Ø{canvasPlumbingKpi.supplyDiam}mm</strong>
+          </span>
+          <span style={{ color: '#94A3B8' }}>
+            Drain: <strong style={{ color: '#2ECC71' }}>Ø{canvasPlumbingKpi.drainDiam}mm (1:50)</strong>
+          </span>
+          {onOpenPlumbingModal && (
+            <button
+              type="button"
+              onClick={onOpenPlumbingModal}
+              style={{
+                background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+                border: '1px solid #38BDF8',
+                color: '#FFFFFF',
+                borderRadius: '14px',
+                padding: '4px 12px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(2, 132, 199, 0.4)'
+              }}
+            >
+              ⚡ Open Hydraulics Suite
+            </button>
+          )}
         </div>
       )}
 

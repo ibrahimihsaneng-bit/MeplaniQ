@@ -1,3 +1,4 @@
+import math
 from typing import List, Dict, Any, Optional
 from backend.models import PlumbingPipePayload, PlumbingFixturePayload
 
@@ -472,3 +473,154 @@ def calculate_drainage_slopes_and_clearance(
         "standard": "UPC Table 702.1 / IPC Section 704.1"
     }
 
+
+
+
+def calculate_plumbing_wsfu_and_dfu(fixtures: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Computes Water Supply Fixture Units (WSFU per IPC Table 610.3 / UPC Table 6-4)
+    and Drainage Fixture Units (DFU per IPC Table 709.1 / UPC Table 7-3).
+    Evaluates design peak water demand via Hunter's curve and sizes main supply and drain pipes.
+    """
+    wsfu_lookup = {
+        "wash basin": 1.0, "basin": 1.0, "sink": 1.5, "kitchen sink": 1.5,
+        "wc": 2.5, "toilet": 2.5, "water closet": 2.5, "bidet": 1.0,
+        "shower": 2.0, "bathtub": 2.0, "tub": 2.0,
+        "washing machine": 2.0, "dishwasher": 1.5, "urinal": 2.0
+    }
+    dfu_lookup = {
+        "wash basin": 1.0, "basin": 1.0, "sink": 2.0, "kitchen sink": 2.0,
+        "wc": 4.0, "toilet": 4.0, "water closet": 4.0, "bidet": 1.0,
+        "shower": 2.0, "bathtub": 2.0, "tub": 2.0,
+        "washing machine": 3.0, "dishwasher": 2.0, "floor trap": 2.0, "trap": 2.0
+    }
+
+    total_wsfu = 0.0
+    total_dfu = 0.0
+    fixture_breakdown = []
+
+    for f in fixtures:
+        f_type = (f.get("type", "") or f.get("name", "")).lower().strip()
+        f_wsfu = 1.0
+        f_dfu = 1.0
+        for key, val in wsfu_lookup.items():
+            if key in f_type:
+                f_wsfu = val
+                break
+        for key, val in dfu_lookup.items():
+            if key in f_type:
+                f_dfu = val
+                break
+        total_wsfu += f_wsfu
+        total_dfu += f_dfu
+        fixture_breakdown.append({
+            "id": f.get("id", "FIX"),
+            "type": f.get("type", "Fixture"),
+            "wsfu": f_wsfu,
+            "dfu": f_dfu
+        })
+
+    total_wsfu = round(max(1.0, total_wsfu), 1)
+    total_dfu = round(max(1.0, total_dfu), 1)
+
+    # Hunter's Curve equation for flush tank systems
+    # Q (GPM) = 4.0 * (WSFU)^0.55
+    flow_gpm = round(4.0 * (total_wsfu ** 0.55), 1)
+    flow_lpm = round(flow_gpm * 3.78541, 1)
+
+    # Main Supply Pipe Sizing (Velocity limit 1.5 - 2.0 m/s per IPC 604.8)
+    if flow_lpm <= 25.0:
+        supply_pipe_mm = 20.0
+        supply_pipe_inch = "3/4\""
+    elif flow_lpm <= 45.0:
+        supply_pipe_mm = 25.0
+        supply_pipe_inch = "1\""
+    elif flow_lpm <= 80.0:
+        supply_pipe_mm = 32.0
+        supply_pipe_inch = "1-1/4\""
+    elif flow_lpm <= 140.0:
+        supply_pipe_mm = 40.0
+        supply_pipe_inch = "1-1/2\""
+    else:
+        supply_pipe_mm = 50.0
+        supply_pipe_inch = "2\""
+
+    # Building Drain / Sewer Sizing per IPC Table 710.1(1)
+    if total_dfu <= 20.0:
+        drain_pipe_mm = 75.0
+        drain_pipe_inch = "3\""
+        min_slope_pct = 2.0  # 1:50
+    elif total_dfu <= 160.0:
+        drain_pipe_mm = 110.0
+        drain_pipe_inch = "4\""
+        min_slope_pct = 2.0  # 1:50
+    else:
+        drain_pipe_mm = 160.0
+        drain_pipe_inch = "6\""
+        min_slope_pct = 1.0  # 1:100
+
+    return {
+        "total_wsfu": total_wsfu,
+        "total_dfu": total_dfu,
+        "design_flow_gpm": flow_gpm,
+        "design_flow_lpm": flow_lpm,
+        "recommended_supply_pipe_mm": supply_pipe_mm,
+        "recommended_supply_pipe_inch": supply_pipe_inch,
+        "recommended_drain_pipe_mm": drain_pipe_mm,
+        "recommended_drain_pipe_inch": drain_pipe_inch,
+        "min_drain_slope_pct": min_slope_pct,
+        "fixture_count": len(fixtures),
+        "fixture_breakdown": fixture_breakdown,
+        "compliance_standard": "IPC 604.8 / IPC 709.1 / UPC Table 6-4"
+    }
+
+
+def calculate_water_storage_and_booster_pump(
+    occupant_count: int = 6,
+    building_height_m: float = 12.0
+) -> Dict[str, Any]:
+    """
+    Computes Domestic Overhead Tank (OHT), Underground Sump Tank,
+    and Pressure Booster Pump Capacity per NBC 2016 Part 9 / IPC.
+    Baseline demand: 135 L/head/day.
+    """
+    occupants = max(2, occupant_count)
+    per_capita_lpd = 135.0
+    daily_demand_liters = occupants * per_capita_lpd
+
+    # Storage tank capacities:
+    # Overhead Tank (OHT): ~50% of daily demand, rounded to standard 500L/1000L step
+    oht_liters = max(1000, math.ceil((daily_demand_liters * 0.50) / 250.0) * 250)
+    # Underground Sump: 100% daily demand + fire buffer, rounded to 500L
+    sump_liters = max(2000, math.ceil((daily_demand_liters * 1.00) / 500.0) * 500)
+
+    # Booster Pump Sizing:
+    # Refill OHT within 1.5 to 2.0 hours
+    pump_flow_lpm = round(oht_liters / 90.0, 1)  # 90 mins refill
+    # Total Dynamic Head (TDH): static height + friction (25%) + residual nozzle pressure (1.0 bar = 10m)
+    static_head_m = building_height_m + 2.5
+    friction_head_m = static_head_m * 0.25
+    residual_head_m = 10.0
+    total_head_m = round(static_head_m + friction_head_m + residual_head_m, 1)
+
+    # Hydraulic Power = (rho * g * Q * H) / (1000 * efficiency)
+    # Q in m3/s, rho=1000, g=9.81, eta=0.60
+    q_m3s = (pump_flow_lpm / 1000.0) / 60.0
+    hydraulic_power_kw = (1000.0 * 9.81 * q_m3s * total_head_m) / (1000.0 * 0.60)
+    # Motor rating with 25% safety margin
+    motor_kw = round(max(0.75, hydraulic_power_kw * 1.25), 2)
+    motor_hp = round(motor_kw * 1.34102, 2)
+    standard_motor_hp = 1.0 if motor_hp <= 1.0 else (1.5 if motor_hp <= 1.5 else (2.0 if motor_hp <= 2.0 else 3.0))
+
+    return {
+        "occupants_count": occupants,
+        "daily_demand_liters": round(daily_demand_liters, 0),
+        "overhead_tank_liters": oht_liters,
+        "underground_sump_liters": sump_liters,
+        "pump_flow_lpm": pump_flow_lpm,
+        "total_dynamic_head_m": total_head_m,
+        "calculated_motor_hp": motor_hp,
+        "standard_booster_pump_hp": standard_motor_hp,
+        "pump_type": "Multi-Stage Vertical Inline Booster Pump with VFD Pressure Transducer",
+        "standard": "NBC 2016 Part 9 Section 1 / IS 1172 / IPC"
+    }

@@ -1083,3 +1083,84 @@ def project_acoustic_analysis_endpoint(project_id: str, space_type: str = "priva
         has_duct_silencer=True
     )
     return perform_hvac_acoustic_analysis(req)
+
+
+
+@app.post("/api/solar/size-pv-bess")
+def solar_pv_bess_sizing_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Sizes Rooftop Solar PV & Battery Energy Storage System (BESS) per IEEE 1547 / IEC 61724.
+    """
+    from backend.solar_pv_engine import SolarPVRequest, size_rooftop_solar_pv
+    req = SolarPVRequest(**payload)
+    return size_rooftop_solar_pv(req)
+
+
+@app.get("/api/projects/{project_id}/solar-pv-sizing")
+def project_solar_pv_sizing_endpoint(
+    project_id: str,
+    climate_zone: str = "tropical_sunny",
+    battery_backup_hours: float = 4.0
+):
+    """
+    Calculates rooftop solar PV generation and BESS capacity based on project floor plan area.
+    """
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    cad_data = proj.get("cad_json_data", {})
+    rooms = cad_data.get("rooms", [])
+    total_footprint = sum(float(r.get("area", 20.0)) for r in rooms) if rooms else 200.0
+    from backend.solar_pv_engine import SolarPVRequest, size_rooftop_solar_pv
+    req = SolarPVRequest(
+        rooftop_area_sqm=max(50.0, total_footprint),
+        climate_zone=climate_zone,
+        avg_daily_load_kwh=max(15.0, total_footprint * 0.22),
+        battery_backup_hours=battery_backup_hours
+    )
+    return size_rooftop_solar_pv(req)
+
+
+
+@app.post("/api/plumbing/hydraulic-demand")
+def plumbing_hydraulic_demand_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Computes Water Supply Fixture Units (WSFU per IPC 610.3),
+    Hunter's curve peak flow rate (GPM/LPM), and Drainage Fixture Units (DFU per IPC 709.1).
+    """
+    from backend.plumbing_router import calculate_plumbing_wsfu_and_dfu
+    fixtures = payload.get("fixtures", [])
+    return calculate_plumbing_wsfu_and_dfu(fixtures=fixtures)
+
+
+@app.post("/api/plumbing/water-storage-pump")
+def plumbing_water_storage_pump_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Calculates Overhead Tank (OHT), Sump Tank capacity, and booster pump power (HP/kW) per NBC / IPC.
+    """
+    from backend.plumbing_router import calculate_water_storage_and_booster_pump
+    occupants = int(payload.get("occupant_count", 6))
+    height = float(payload.get("building_height_m", 12.0))
+    return calculate_water_storage_and_booster_pump(occupant_count=occupants, building_height_m=height)
+
+
+@app.get("/api/projects/{project_id}/plumbing-hydraulics")
+def project_plumbing_hydraulics_endpoint(project_id: str):
+    """
+    Retrieves full plumbing hydraulics report (WSFU, DFU, storage tanks, booster pump) for a project.
+    """
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    cad_data = proj.get("cad_json_data", {})
+    fixtures = cad_data.get("plumbing_fixtures", [])
+    rooms = cad_data.get("rooms", [])
+    from backend.plumbing_router import calculate_plumbing_wsfu_and_dfu, calculate_water_storage_and_booster_pump
+    demand_res = calculate_plumbing_wsfu_and_dfu(fixtures)
+    occupants = max(4, len(rooms) * 2)
+    storage_res = calculate_water_storage_and_booster_pump(occupant_count=occupants)
+    return {
+        "project_id": project_id,
+        "hydraulic_demand": demand_res,
+        "storage_and_pumps": storage_res
+    }
