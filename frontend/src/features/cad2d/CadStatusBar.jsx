@@ -1,10 +1,12 @@
 import React from 'react';
+import { PLUMBING_SYSTEMS } from './pipeRoutingEngine';
 
 /**
  * CadStatusBar.jsx
  * ================
  * Professional CAD Drafting Status Bar dock at the bottom of the 2D CAD canvas.
- * Provides live coordinate readouts, OSNAP/ORTHO status toggles, and contextual drafting shortcuts.
+ * Provides live coordinate readouts, OSNAP/ORTHO status toggles, plumbing pipe selectors,
+ * and contextual drafting shortcuts.
  */
 export default function CadStatusBar({
   cursorCoords = { x: 0, y: 0 },
@@ -20,9 +22,17 @@ export default function CadStatusBar({
   draftingPointsCount = 0,
   onFinishDrafting,
   onCancelDrafting,
-  onCloseRoom
+  onCloseRoom,
+  // Plumbing System Selector Props
+  pipeSystem = 'CW',
+  onChangePipeSystem,
+  pipeDiameter = 25,
+  onChangePipeDiameter,
+  pipeSlope = '1:50',
+  onChangePipeSlope
 }) {
   const isDrafting = draftingPointsCount > 0;
+  const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
 
   return (
     <div
@@ -35,7 +45,7 @@ export default function CadStatusBar({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '6px 14px',
-        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+        backgroundColor: 'rgba(15, 23, 42, 0.94)',
         backdropFilter: 'blur(10px)',
         border: '1px solid #334155',
         borderRadius: '8px',
@@ -48,9 +58,9 @@ export default function CadStatusBar({
       }}
     >
       {/* LEFT: Contextual Drafting Guidance & Live Coordinates */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
         {/* Live Coordinate Display */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'monospace', fontSize: '11.5px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'monospace', fontSize: '11.5px', flexShrink: 0 }}>
           <span style={{ color: '#64748B' }}>CAD COORDS:</span>
           <span style={{ color: '#38BDF8', fontWeight: 700 }}>
             X: {Math.round(cursorCoords.x).toLocaleString()} mm
@@ -60,10 +70,10 @@ export default function CadStatusBar({
           </span>
         </div>
 
-        <div style={{ width: '1px', height: '16px', backgroundColor: '#334155' }} />
+        <div style={{ width: '1px', height: '16px', backgroundColor: '#334155', flexShrink: 0 }} />
 
         {/* Dynamic Context Hint */}
-        <div style={{ color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {activeTool === 'wall' && (
             isDrafting ? (
               <>
@@ -80,6 +90,26 @@ export default function CadStatusBar({
               <>
                 <span style={{ color: '#38BDF8', fontWeight: 700 }}>✏️ WALL TOOL:</span>
                 <span>Click on canvas to place the starting point.</span>
+              </>
+            )
+          )}
+
+          {activeTool === 'plumbing' && (
+            isDrafting ? (
+              <>
+                <span style={{ color: currentSys.color, fontWeight: 700 }}>
+                  ● ROUTING {currentSys.name.toUpperCase()} (⌀{pipeDiameter}mm):
+                </span>
+                <span>Click waypoint or fixture port to connect •</span>
+                <span style={{ color: '#38BDF8' }}>[Enter]</span>
+                <span>Finish •</span>
+                <span style={{ color: '#EF4444' }}>[Esc]</span>
+                <span>Cancel</span>
+              </>
+            ) : (
+              <>
+                <span style={{ color: '#06B6D4', fontWeight: 700 }}>🚰 PIPE ROUTER:</span>
+                <span>Click to start pipe route or snap directly to any fixture port.</span>
               </>
             )
           )}
@@ -111,12 +141,90 @@ export default function CadStatusBar({
         </div>
       </div>
 
+      {/* CENTER: Active Plumbing System & Diameter Quick Selector when activeTool === 'plumbing' */}
+      {activeTool === 'plumbing' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(30, 41, 59, 0.7)', padding: '2px 8px', borderRadius: '6px', border: '1px solid #334155' }}>
+          <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>SYSTEM:</span>
+          {Object.values(PLUMBING_SYSTEMS).map(sys => {
+            const isSelected = pipeSystem === sys.id;
+            return (
+              <button
+                key={sys.id}
+                type="button"
+                onClick={() => onChangePipeSystem?.(sys.id)}
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  backgroundColor: isSelected ? sys.color : 'transparent',
+                  border: isSelected ? 'none' : '1px solid #475569',
+                  color: isSelected ? '#FFFFFF' : '#CBD5E1',
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title={`Switch to ${sys.name}`}
+              >
+                <span>{sys.icon}</span>
+                <span>{sys.id}</span>
+              </button>
+            );
+          })}
+
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#475569', margin: '0 2px' }} />
+
+          <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>DIAM:</span>
+          <select
+            value={pipeDiameter}
+            onChange={(e) => onChangePipeDiameter?.(Number(e.target.value))}
+            style={{
+              backgroundColor: '#0F172A',
+              border: '1px solid #475569',
+              borderRadius: '4px',
+              color: '#F8FAFC',
+              fontSize: '10.5px',
+              padding: '2px 4px',
+              cursor: 'pointer'
+            }}
+          >
+            {currentSys.diams.map(d => (
+              <option key={d} value={d}>⌀{d}mm</option>
+            ))}
+          </select>
+
+          {pipeSystem === 'DRAIN' && (
+            <>
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700, marginLeft: '4px' }}>SLOPE:</span>
+              <button
+                type="button"
+                onClick={() => onChangePipeSlope?.(pipeSlope === '1:50' ? '1:100' : '1:50')}
+                style={{
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  backgroundColor: '#065F46',
+                  border: '1px solid #10B981',
+                  color: '#A7F3D0',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+                title="Toggle self-cleansing slope (IPC 704 standard)"
+              >
+                {pipeSlope} ({(pipeSlope === '1:50' ? 20 : 10)}mm/m)
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* RIGHT: Drafting Status Toggles & Action Buttons */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         {/* Active Drafting Action Controls */}
         {isDrafting && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '8px' }}>
-            {draftingPointsCount >= 3 && (
+            {activeTool === 'wall' && draftingPointsCount >= 3 && (
               <button
                 type="button"
                 onClick={onCloseRoom}
@@ -141,16 +249,16 @@ export default function CadStatusBar({
               style={{
                 padding: '3px 10px',
                 borderRadius: '4px',
-                backgroundColor: '#1E293B',
-                border: '1px solid #475569',
-                color: '#38BDF8',
-                fontWeight: 600,
+                backgroundColor: activeTool === 'plumbing' ? currentSys.color : '#1E293B',
+                border: `1px solid ${activeTool === 'plumbing' ? '#FFFFFF' : '#475569'}`,
+                color: '#FFFFFF',
+                fontWeight: 700,
                 fontSize: '11px',
                 cursor: 'pointer'
               }}
-              title="Finish current wall chain"
+              title={activeTool === 'plumbing' ? "Commit and finalize pipe route" : "Finish current wall chain"}
             >
-              Finish Wall (Enter)
+              {activeTool === 'plumbing' ? "✓ Finish Pipe (Enter)" : "Finish Wall (Enter)"}
             </button>
             <button
               type="button"

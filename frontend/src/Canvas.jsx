@@ -18,6 +18,13 @@ import {
   createWallPolygonFromLine,
   ptDist
 } from './features/cad2d/cadDrawingUtils';
+import {
+  PLUMBING_SYSTEMS,
+  extractFixturePorts,
+  findNearestFixturePort,
+  generateOrthogonalPath,
+  calculatePipeMetrics
+} from './features/cad2d/pipeRoutingEngine';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1063,12 +1070,68 @@ export default function Canvas({
   const [doorConfig, setDoorConfig] = useState({ width: 900, flipSwing: false, flipHinge: false });
   const [windowConfig, setWindowConfig] = useState({ width: 1200 });
 
+  // ─── Plumbing Pipe Routing State ──────────────────────────────────────────
+  const [pipeSystem, setPipeSystem] = useState('CW');
+  const [pipeDiameter, setPipeDiameter] = useState(25);
+  const [pipeSlope, setPipeSlope] = useState('1:50');
+  const [snappedPort, setSnappedPort] = useState(null);
+
+  const fixturePorts = useMemo(() => {
+    const activeFixs = (plumbingFixtures && plumbingFixtures.length > 0)
+      ? plumbingFixtures
+      : (solveData?.plumbing_fixtures || []);
+    return extractFixturePorts(activeFixs, solveData);
+  }, [plumbingFixtures, solveData]);
+
+  const handlePipeSystemChange = useCallback((sysId) => {
+    setPipeSystem(sysId);
+    const spec = PLUMBING_SYSTEMS[sysId] || PLUMBING_SYSTEMS.CW;
+    setPipeDiameter(spec.defaultDiam);
+    if (spec.defaultSlope) setPipeSlope(spec.defaultSlope);
+  }, []);
+
   const [draftingState, setDraftingState] = useState({
     active: false,
     tool: null,
     points: [],
-    isNearStart: false
+    isNearStart: false,
+    startPort: null
   });
+
+  const handleFinishPipeRouting = useCallback((targetEndPort = null) => {
+    if (!draftingState.points || draftingState.points.length < 2) return;
+    const finalPoints = draftingState.points.map(p => [Math.round(p.x), Math.round(p.y)]);
+    const sys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
+    const activeP = (plumbingPipes && plumbingPipes.length > 0) ? plumbingPipes : (solveData?.plumbing_pipes || []);
+    const pCount = activeP.length + 1;
+    const pId = `${pipeSystem}-${pCount}`;
+
+    const hostRoom = targetEndPort?.roomName || draftingState.startPort?.roomName || (solveData?.rooms?.[0]?.name || "Plumbing Room");
+    const connectedTo = targetEndPort?.fixtureId || draftingState.startPort?.fixtureId || null;
+    const slopeRatio = pipeSlope === '1:100' ? 0.01 : 0.02;
+    const metrics = calculatePipeMetrics(draftingState.points, pipeSystem, slopeRatio);
+
+    const newPipe = {
+      id: pId,
+      name: `${sys.name} ${pId}`,
+      type: sys.pipeType,
+      diameter: pipeDiameter,
+      path: finalPoints,
+      x: finalPoints[0][0],
+      y: finalPoints[0][1],
+      end_x: finalPoints[finalPoints.length - 1][0],
+      end_y: finalPoints[finalPoints.length - 1][1],
+      host_room_id: hostRoom,
+      connected_to: connectedTo,
+      total_length_mm: metrics.totalLengthMm,
+      slope: pipeSystem === 'DRAIN' ? pipeSlope : undefined,
+      fall_mm: pipeSystem === 'DRAIN' ? metrics.fallMm : undefined
+    };
+
+    onLiveItemUpdate?.('AddPlumbingPipe', null, newPipe);
+    setDraftingState({ active: false, tool: null, points: [], isNearStart: false, startPort: null });
+    setSnappedPort(null);
+  }, [draftingState, pipeSystem, pipeDiameter, pipeSlope, plumbingPipes, solveData, onLiveItemUpdate]);
 
   const handleCloseRoomLoop = useCallback(() => {
     if (!draftingState.points || draftingState.points.length < 3) return;
@@ -1114,8 +1177,8 @@ export default function Canvas({
   }, []);
 
   useEffect(() => {
-    if (activeTool !== 'wall' && draftingState.active) {
-      setDraftingState({ active: false, tool: null, points: [], isNearStart: false });
+    if (activeTool !== 'wall' && activeTool !== 'plumbing' && draftingState.active) {
+      setDraftingState({ active: false, tool: null, points: [], isNearStart: false, startPort: null });
     }
   }, [activeTool, draftingState.active]);
 
@@ -1134,13 +1197,23 @@ export default function Canvas({
       } else if (e.key === 'F7') {
         e.preventDefault();
         setInternalShowGrid(prev => !(prev ?? showGrid));
+      } else if (e.key === 'Tab') {
+        if (activeTool === 'plumbing') {
+          e.preventDefault();
+          const keys = ['CW', 'HW', 'DRAIN', 'VENT'];
+          const nxt = (keys.indexOf(pipeSystem) + 1) % keys.length;
+          handlePipeSystemChange(keys[nxt]);
+        }
       } else if (e.key === 'c' || e.key === 'C') {
-        if (draftingState.active && draftingState.points?.length >= 3) {
+        if (draftingState.active && draftingState.tool === 'wall' && draftingState.points?.length >= 3) {
           e.preventDefault();
           handleCloseRoomLoop();
         }
       } else if (e.key === 'Enter') {
-        if (draftingState.active && draftingState.points?.length >= 2) {
+        if (draftingState.active && draftingState.tool === 'pipe' && draftingState.points?.length >= 2) {
+          e.preventDefault();
+          handleFinishPipeRouting(snappedPort);
+        } else if (draftingState.active && draftingState.tool === 'wall' && draftingState.points?.length >= 2) {
           e.preventDefault();
           handleFinishWallChain();
         }
@@ -1199,7 +1272,7 @@ export default function Canvas({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem, draftingState, handleCloseRoomLoop, handleFinishWallChain, handleCancelDrafting, showGrid, activeTool]);
+  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem, draftingState, handleCloseRoomLoop, handleFinishWallChain, handleFinishPipeRouting, handleCancelDrafting, showGrid, activeTool, pipeSystem, handlePipeSystemChange, snappedPort]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -1241,6 +1314,15 @@ export default function Canvas({
       ? draftingState.points[draftingState.points.length - 1]
       : null;
 
+    // Fixture port snapping for plumbing tool
+    let foundPort = null;
+    if (activeTool === 'plumbing') {
+      foundPort = findNearestFixturePort(coords, fixturePorts, 220 / zoom);
+      setSnappedPort(foundPort);
+    } else if (snappedPort) {
+      setSnappedPort(null);
+    }
+
     const snapResult = findNearestOsnap(coords, solveData, zoom, {
       enabled: osnapActive,
       activeStartPoint: lastDraftPt,
@@ -1249,10 +1331,10 @@ export default function Canvas({
     });
     setOsnapPt(snapResult);
 
-    // Apply Ortho or Polar if drawing
-    let effectivePt = snapResult ? snapResult.point : coords;
-    if (!snapResult && lastDraftPt) {
-      if (orthoActive) {
+    // Apply Snapped Port or OSNAP or Ortho
+    let effectivePt = foundPort ? foundPort.point : (snapResult ? snapResult.point : coords);
+    if (!foundPort && !snapResult && lastDraftPt) {
+      if (orthoActive || draftingState.tool === 'pipe') {
         effectivePt = applyOrthoConstraint(lastDraftPt, coords, e.shiftKey);
       } else if (polarActive) {
         effectivePt = applyPolarConstraint(lastDraftPt, coords, 45);
@@ -1395,6 +1477,37 @@ export default function Canvas({
           setDraftingState(prev => ({
             ...prev,
             points: [...(prev.points || []), targetPt]
+          }));
+        }
+      }
+      return;
+    }
+
+    // Interactive 2D Plumbing Pipe Routing
+    if (activeTool === 'plumbing' && e.button === 0) {
+      const targetPt = snappedPort ? snappedPort.point : cadCursorPt;
+
+      if (!draftingState.active || draftingState.tool !== 'pipe') {
+        // Start new pipe route
+        setDraftingState({
+          active: true,
+          tool: 'pipe',
+          points: [targetPt],
+          startPort: snappedPort || null
+        });
+      } else {
+        const lastPt = draftingState.points[draftingState.points.length - 1];
+        const ortho = generateOrthogonalPath(lastPt, targetPt);
+        const newPoints = [...draftingState.points.slice(0, -1), ...ortho];
+
+        // If clicking directly on a destination port, immediately finalize pipe!
+        if (snappedPort && (!draftingState.startPort || snappedPort.id !== draftingState.startPort.id)) {
+          draftingState.points = newPoints;
+          handleFinishPipeRouting(snappedPort);
+        } else {
+          setDraftingState(prev => ({
+            ...prev,
+            points: newPoints
           }));
         }
       }
@@ -2295,11 +2408,18 @@ export default function Canvas({
                     }
                   }
 
-                  const ptsStr = `${p0[0]},${p0[1]} ${p1[0]},${p1[1]}`;
+                  const isMultiPoint = path && Array.isArray(path) && path.length > 2;
+                  const ptsStr = isMultiPoint
+                    ? path.map(p => `${p[0]},${p[1]}`).join(' ')
+                    : `${p0[0]},${p0[1]} ${p1[0]},${p1[1]}`;
                   const isSelected = selectedItem?.item?.id === pipe.id && selectedItem?.type === "PlumbingPipe";
 
-                  const midX = (p0[0] + p1[0]) / 2;
-                  const midY = (p0[1] + p1[1]) / 2;
+                  const midX = isMultiPoint
+                    ? (path[0][0] + path[path.length - 1][0]) / 2
+                    : (p0[0] + p1[0]) / 2;
+                  const midY = isMultiPoint
+                    ? (path[0][1] + path[path.length - 1][1]) / 2
+                    : (p0[1] + p1[1]) / 2;
 
                   const pipeType = pipe.type || "Pipe";
                   const strokeC = getPipeColor(pipeType);
@@ -2319,6 +2439,18 @@ export default function Canvas({
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />
+                      {/* 90° Elbow junction circles at corners for routed pipes */}
+                      {isMultiPoint && path.slice(1, -1).map((corn, cIdx) => (
+                        <circle
+                          key={`elbow-${pipe.id || idx}-${cIdx}`}
+                          cx={corn[0]}
+                          cy={corn[1]}
+                          r={trunkSW(diam) * 1.1}
+                          fill={strokeC}
+                          stroke="#FFFFFF"
+                          strokeWidth={1 / zoom}
+                        />
+                      ))}
                       {/* Pipe label: Compact resting tag vs. Click-to-Expand Badge */}
                       <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`} style={{ pointerEvents: 'none', userSelect: 'none' }}>
                         {isSelected ? (
@@ -3891,6 +4023,11 @@ export default function Canvas({
             closestWall={closestWall}
             doorConfig={doorConfig}
             windowConfig={windowConfig}
+            fixturePorts={fixturePorts}
+            snappedPort={snappedPort}
+            pipeSystem={pipeSystem}
+            pipeDiameter={pipeDiameter}
+            pipeSlopeRatio={pipeSlope === '1:100' ? 0.01 : 0.02}
           />
         </g>
       </svg>
@@ -4457,9 +4594,15 @@ export default function Canvas({
         onToggleGrid={() => setInternalShowGrid(prev => !(prev ?? showGrid))}
         activeTool={activeTool}
         draftingPointsCount={draftingState.points?.length || 0}
-        onFinishDrafting={handleFinishWallChain}
+        onFinishDrafting={draftingState.tool === 'pipe' ? () => handleFinishPipeRouting(snappedPort) : handleFinishWallChain}
         onCancelDrafting={handleCancelDrafting}
         onCloseRoom={handleCloseRoomLoop}
+        pipeSystem={pipeSystem}
+        onChangePipeSystem={handlePipeSystemChange}
+        pipeDiameter={pipeDiameter}
+        onChangePipeDiameter={setPipeDiameter}
+        pipeSlope={pipeSlope}
+        onChangePipeSlope={setPipeSlope}
       />
     </div>
   );
