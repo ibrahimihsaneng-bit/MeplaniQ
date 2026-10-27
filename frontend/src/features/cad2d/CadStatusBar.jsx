@@ -81,7 +81,11 @@ export default function CadStatusBar({
   // Multi-Page Titleblock Sheet Studio (Cycle 21)
   onOpenSheetStudio,
   // Native AutoCAD AutoLISP Studio (Cycle 22)
-  onOpenLispStudio
+  onOpenLispStudio,
+  // 2D Thermal Zone Modeling (Cycle 23)
+  showThermalHeatmap = false,
+  onToggleThermalHeatmap,
+  onOpenThermalStudio
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -1130,6 +1134,54 @@ export default function CadStatusBar({
           >
             <span>⚙️</span>
             <span>LISP</span>
+          </button>
+        )}
+
+        {/* THERMAL HEATMAP Toggle (Cycle 23) */}
+        {onToggleThermalHeatmap && (
+          <button
+            type="button"
+            onClick={onToggleThermalHeatmap}
+            style={{
+              padding: '3px 8px',
+              borderRadius: '4px',
+              backgroundColor: showThermalHeatmap ? '#D97706' : '#1E293B',
+              border: `1px solid ${showThermalHeatmap ? '#F59E0B' : '#334155'}`,
+              color: showThermalHeatmap ? '#FFFFFF' : '#94A3B8',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer'
+            }}
+            title="Toggle 2D ASHRAE 90.1 Thermal Zone Heatmap Overlay"
+          >
+            🌡️ HEATMAP {showThermalHeatmap ? 'ON' : 'OFF'}
+          </button>
+        )}
+
+        {/* THERMAL ZONE STUDIO (Cycle 23) */}
+        {onOpenThermalStudio && (
+          <button
+            type="button"
+            onClick={onOpenThermalStudio}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '4px',
+              backgroundColor: '#B45309',
+              border: '1px solid #F59E0B',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 0 10px rgba(245, 158, 11, 0.35)',
+              transition: 'all 0.15s ease'
+            }}
+            title="Open 2D Thermal Zone & Space Boundary Studio (ASHRAE Cooling/Heating Loads & CFM)"
+          >
+            <span>🌡️</span>
+            <span>THERMAL</span>
           </button>
         )}
       </div>

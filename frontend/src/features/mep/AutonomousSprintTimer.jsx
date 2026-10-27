@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 22, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 23, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -237,9 +237,21 @@ export default function AutonomousSprintTimer({ currentCycle = 22, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 22 (Hour 8): Native AutoCAD AutoLISP Compiler &amp; Layer Standards Generator (.lsp / .scr)
+                      Cycle 23 (Hour 9): Automated Room Space Boundary Detection &amp; 2D Thermal Zone Modeling
                     </span>
                     <span style={{ fontSize: '10px', color: '#34D399', fontWeight: 800 }}>LIVE</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                    Algorithmic space boundary orientation detection (N/S/E/W perimeter vs core), ASHRAE 90.1 envelope U-values, solar heat flux, peak cooling kW, CFM supply airflow sizing &amp; in-canvas 2D load heatmap overlay.
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
+                      Cycle 22 (Hour 8): Native AutoCAD AutoLISP Compiler &amp; Layer Standards Generator (.lsp / .scr)
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>✓ COMPLETED</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
                     Direct compilation of 2D CAD entities into executable Autodesk AutoLISP scripts (.lsp) and command scripts (.scr) conforming to AIA / ISO 13567 CAD layer standards with block definitions, text styles, and dimstyles.
@@ -333,24 +345,24 @@ export default function AutonomousSprintTimer({ currentCycle = 22, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #38BDF8' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 23 (Hour 9): Automated Room Space Boundary Detection &amp; 2D Thermal Zone Modeling
+                      Cycle 24 (Hour 10): 2D Electrical Load Schedule &amp; Photovoltaic String Array Routing
                     </span>
                     <span style={{ fontSize: '10px', color: '#38BDF8', fontWeight: 700 }}>NEXT HOUR</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
-                    Algorithmic enclosed boundary polygon extraction from wall centerlines, ASHRAE 90.1 thermal envelope U-values, automated space zone boundary polyline generation, and thermal load color zoning.
+                    NEC Article 220 branch load schedule balancing, rooftop solar photovoltaic module string routing, inverter sizing, and 2D single-line diagram generation.
                   </div>
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #64748B' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8' }}>
-                      Cycle 24 (Hour 10-24): Multi-Layer MEP Coordination &amp; Full BIM Suite
+                      Cycle 25-30 (Hours 11-24): Multi-Discipline Engineering Automation &amp; BIM Exchange
                     </span>
                     <span style={{ fontSize: '10px', color: '#64748B' }}>24H ROADMAP</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
-                    Multi-discipline coordination, IFC building model exchange, and comprehensive automated drawing production.
+                    Automated drawing production, construction schedules, and industry-standard IFC / DWG exchange formats.
                   </div>
                 </div>
               </div>

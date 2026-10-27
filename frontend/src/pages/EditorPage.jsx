@@ -50,6 +50,7 @@ import MepCalculationModal from '../features/mep/MepCalculationModal';
 import AutonomousSprintTimer from '../features/mep/AutonomousSprintTimer';
 import CadSheetLayoutModal from '../features/cad2d/CadSheetLayoutModal';
 import AutoCadLispStudioModal from '../features/cad2d/AutoCadLispStudioModal';
+import ThermalZoneStudioModal from '../features/cad2d/ThermalZoneStudioModal';
 import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
 import { downloadIfc4Model } from '../features/mep/ifcExportBridge';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
@@ -100,6 +101,8 @@ export default function EditorPage() {
   const [isInspectorExpanded, setIsInspectorExpanded] = useState(false);
   const [isSheetLayoutModalOpen, setIsSheetLayoutModalOpen] = useState(false);
   const [isLispStudioOpen, setIsLispStudioOpen] = useState(false);
+  const [showThermalHeatmap, setShowThermalHeatmap] = useState(false);
+  const [isThermalStudioOpen, setIsThermalStudioOpen] = useState(false);
 
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -2242,7 +2245,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={22} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={23} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2498,6 +2501,31 @@ export default function EditorPage() {
             title="Open Autodesk AutoCAD AutoLISP (.lsp) & Script (.scr) Compiler Studio"
           >
             <span>⚙️ AutoLISP</span>
+          </button>
+
+          {/* 🌡️ 2D Thermal Zone & ASHRAE Building Physics Studio (Cycle 23) */}
+          <button
+            onClick={() => setIsThermalStudioOpen(true)}
+            disabled={!solveData}
+            style={{
+              background: 'linear-gradient(135deg, #B45309 0%, #92400E 100%)',
+              border: '1px solid #F59E0B',
+              color: '#FFFFFF',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(245, 158, 11, 0.4)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Open 2D Thermal Zone & Space Boundary Studio (ASHRAE Cooling/Heating Loads & CFM)"
+          >
+            <span>🌡️ Thermal</span>
           </button>
 
           {/* 🚰 Advanced Plumbing & Hydraulics Suite */}
@@ -3120,6 +3148,9 @@ export default function EditorPage() {
                   onOpenPlumbingModal={() => setIsPlumbingModalOpen(true)}
                   onOpenSheetStudio={() => setIsSheetLayoutModalOpen(true)}
                   onOpenLispStudio={() => setIsLispStudioOpen(true)}
+                  showThermalHeatmap={showThermalHeatmap}
+                  onToggleThermalHeatmap={() => setShowThermalHeatmap(prev => !prev)}
+                  onOpenThermalStudio={() => setIsThermalStudioOpen(true)}
                   onCursorMove={setCursorCoords}
                   viewTransform={viewTransform}
                   setViewTransform={setViewTransform}
@@ -3329,6 +3360,16 @@ export default function EditorPage() {
         isOpen={isLispStudioOpen}
         onClose={() => setIsLispStudioOpen(false)}
         solveData={solveData}
+        projectName={solveData?.project_name || 'Floorplan'}
+      />
+
+      {/* 2D Thermal Zone & ASHRAE Building Physics Studio Modal (Cycle 23) */}
+      <ThermalZoneStudioModal
+        isOpen={isThermalStudioOpen}
+        onClose={() => setIsThermalStudioOpen(false)}
+        solveData={solveData}
+        showThermalHeatmap={showThermalHeatmap}
+        onToggleThermalHeatmap={() => setShowThermalHeatmap(prev => !prev)}
         projectName={solveData?.project_name || 'Floorplan'}
       />
 

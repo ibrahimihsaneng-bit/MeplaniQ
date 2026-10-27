@@ -63,6 +63,7 @@ import {
   createPenetrationSleeve,
   generateBypassDetour
 } from './features/cad2d/clashDetectionEngine';
+import { compileFloorplanThermalZones } from './features/cad2d/thermalZoneEngine';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1025,7 +1026,10 @@ export default function Canvas({
   onSelectItem,
   onOpenPlumbingModal,
   onOpenSheetStudio,
-  onOpenLispStudio
+  onOpenLispStudio,
+  showThermalHeatmap = false,
+  onToggleThermalHeatmap,
+  onOpenThermalStudio
 }) {
   const svgRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -1053,6 +1057,12 @@ export default function Canvas({
     getDisciplineVisualState('electrical', disciplineView, disciplineDisplayMode),
     [disciplineView, disciplineDisplayMode]
   );
+
+  // 2D Thermal Zone Modeling (Cycle 23)
+  const thermalZonesData = useMemo(() => {
+    if (!showThermalHeatmap) return { zones: [] };
+    return compileFloorplanThermalZones(solveData);
+  }, [showThermalHeatmap, solveData]);
 
   // On-Canvas Real-Time Plumbing & Hydraulics KPI Metrics
   const canvasPlumbingKpi = useMemo(() => {
@@ -4517,6 +4527,75 @@ export default function Canvas({
             </g>
           )}
 
+          {/* LAYER_THERMAL_HEATMAP (Cycle 23: 2D Thermal Zone Load Heatmap) */}
+          {showThermalHeatmap && (
+            <g id="LAYER_THERMAL_HEATMAP" style={{ pointerEvents: 'auto' }}>
+              {thermalZonesData.zones.map((zone, zIdx) => {
+                const pts = zone.points || [];
+                if (pts.length < 3) return null;
+                const pointsStr = pts.map(p => `${Array.isArray(p) ? p[0] : p.x},${Array.isArray(p) ? p[1] : p.y}`).join(' ');
+                const [cx, cy] = zone.centroid || [0, 0];
+
+                return (
+                  <g key={`thermal-zone-${zone.roomId || zIdx}`}>
+                    {/* Zone Boundary Polygon with Heatmap Fill */}
+                    <polygon
+                      points={pointsStr}
+                      fill={zone.heatFill}
+                      stroke={zone.heatColor}
+                      strokeWidth={2.5 / zoom}
+                      strokeDasharray={`${8 / zoom} ${4 / zoom}`}
+                    />
+
+                    {/* Central Thermal Load Badge */}
+                    <g transform={`translate(${cx}, ${cy})`}>
+                      <g transform={`scale(${1 / zoom}, ${-1 / zoom})`} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                        <rect
+                          x="-85"
+                          y="-24"
+                          width="170"
+                          height="48"
+                          rx="6"
+                          fill="rgba(15, 23, 42, 0.94)"
+                          stroke={zone.heatColor}
+                          strokeWidth="1.5"
+                        />
+                        <text
+                          y="-8"
+                          textAnchor="middle"
+                          fill={zone.heatColor}
+                          fontSize="9"
+                          fontWeight="800"
+                          letterSpacing="0.3px"
+                        >
+                          {zone.zoneClassification}
+                        </text>
+                        <text
+                          y="6"
+                          textAnchor="middle"
+                          fill="#F8FAFC"
+                          fontSize="10"
+                          fontWeight="700"
+                        >
+                          {zone.totalCoolingKw} kW • {zone.requiredAirflowCfm} CFM
+                        </text>
+                        <text
+                          y="18"
+                          textAnchor="middle"
+                          fill="#94A3B8"
+                          fontSize="8"
+                          fontWeight="600"
+                        >
+                          {zone.loadDensityWm2} W/m² • {zone.heatBadge}
+                        </text>
+                      </g>
+                    </g>
+                  </g>
+                );
+              })}
+            </g>
+          )}
+
           {/* LAYER_ANNOTATIONS */}
           <g
             id="LAYER_ANNOTATIONS"
@@ -5763,6 +5842,9 @@ export default function Canvas({
         onToggleSleeves={() => setShowSleeves(prev => !prev)}
         onOpenSheetStudio={onOpenSheetStudio}
         onOpenLispStudio={onOpenLispStudio}
+        showThermalHeatmap={showThermalHeatmap}
+        onToggleThermalHeatmap={onToggleThermalHeatmap}
+        onOpenThermalStudio={onOpenThermalStudio}
       />
     </div>
   );
