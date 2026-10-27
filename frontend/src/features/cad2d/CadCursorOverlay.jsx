@@ -69,7 +69,9 @@ export default function CadCursorOverlay({
   // Dimension & Selection Props (Cycle 19)
   marqueeBox = null,
   dimensionDraft = null,
-  roomTagPreview = null
+  roomTagPreview = null,
+  // 2D Clash Detection & Interference Props (Cycle 20)
+  detectedClashes = []
 }) {
   const glyphSize = 14 / zoom;
   const halfGlyph = glyphSize / 2;
@@ -1208,6 +1210,57 @@ export default function CadCursorOverlay({
               </text>
             </g>
           </g>
+        </g>
+      )}
+
+      {/* 12. MULTI-DISCIPLINE 2D MEP CLASH COLLISION BEACONS */}
+      {detectedClashes && detectedClashes.length > 0 && (
+        <g id="CAD_CLASH_COLLISION_BEACONS">
+          {detectedClashes.map(clash => {
+            const isHard = clash.severity === 'HARD';
+            const isCrit = clash.severity === 'CRITICAL';
+            const isSleeve = clash.severity === 'SLEEVE_REQUIRED';
+            const color = isCrit ? '#EF4444' : (isHard ? '#F43F5E' : '#F59E0B');
+            const ringR = (isHard || isCrit ? 260 : 180);
+
+            return (
+              <g key={clash.id} transform={`translate(${clash.x}, ${clash.y})`}>
+                {/* Outer Warning Halo */}
+                <circle
+                  r={ringR}
+                  fill={isCrit || isHard ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)'}
+                  stroke={color}
+                  strokeWidth={2 / zoom}
+                  strokeDasharray={`${80 / zoom} ${40 / zoom}`}
+                />
+                {/* Inner Core */}
+                <circle
+                  r={40 / zoom}
+                  fill={color}
+                />
+                {/* Crosshair Spikes */}
+                <line x1={-ringR * 0.7} y1={0} x2={ringR * 0.7} y2={0} stroke={color} strokeWidth={1.5 / zoom} />
+                <line x1={0} y1={-ringR * 0.7} x2={0} y2={ringR * 0.7} stroke={color} strokeWidth={1.5 / zoom} />
+
+                {/* Floating Engineering Collision Tag */}
+                <g transform={`translate(0, ${-ringR - 60 / zoom}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                  <rect
+                    x="-90"
+                    y="-12"
+                    width="180"
+                    height="24"
+                    rx="5"
+                    fill="rgba(15, 23, 42, 0.95)"
+                    stroke={color}
+                    strokeWidth="1.5"
+                  />
+                  <text x="0" y="4" textAnchor="middle" fill="#FFFFFF" fontSize="9" fontWeight="800">
+                    {isSleeve ? '🧱 SLEEVE NEEDED' : (isCrit ? '⚡ SEPARATION VIOLATION' : '⚔️ HARD CLASH')}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
         </g>
       )}
     </g>

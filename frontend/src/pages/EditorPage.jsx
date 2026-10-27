@@ -1666,11 +1666,41 @@ export default function EditorPage() {
           if (idsByType.Window) nextState.windows = (nextState.windows || []).filter(w => !idsByType.Window.has(w.id));
           if (idsByType.Dimension) nextState.dimensions = (nextState.dimensions || []).filter(d => !idsByType.Dimension.has(d.id));
           if (idsByType.RoomTag) nextState.room_tags = (nextState.room_tags || []).filter(t => !idsByType.RoomTag.has(t.id));
+          if (idsByType.PenetrationSleeve) nextState.penetration_sleeves = (nextState.penetration_sleeves || []).filter(s => !idsByType.PenetrationSleeve.has(s.id));
           return nextState;
         });
 
         setIsDirty(true);
         showToast(`Batch deleted ${items.length} selected items`, "info");
+      }
+      return;
+    } else if (itemType === "AddPenetrationSleeve") {
+      const newSleeve = updates;
+      setSolveData(prev => prev ? {
+        ...prev,
+        penetration_sleeves: [...(prev.penetration_sleeves || []).filter(s => s.id !== newSleeve.id), newSleeve]
+      } : prev);
+      setIsDirty(true);
+      return;
+    } else if (itemType === "DeletePenetrationSleeve") {
+      setSolveData(prev => prev ? {
+        ...prev,
+        penetration_sleeves: (prev.penetration_sleeves || []).filter(s => s.id !== itemId)
+      } : prev);
+      setIsDirty(true);
+      return;
+    } else if (itemType === "ApplyBypassDetour") {
+      const pipeId = itemId;
+      const { path_points } = updates || {};
+      if (pipeId && path_points) {
+        newPlumbingPipes = newPlumbingPipes.map(p => p.id === pipeId ? { ...p, path_points } : p);
+        setEditablePlumbingPipes(newPlumbingPipes);
+        setSolveData(prev => prev ? {
+          ...prev,
+          plumbing_pipes: (prev.plumbing_pipes || []).map(p => p.id === pipeId ? { ...p, path_points } : p)
+        } : prev);
+        setIsDirty(true);
+        showToast("Applied 45° elevation bypass detour to pipe", "success");
       }
       return;
     }
@@ -2208,7 +2238,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={19} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={20} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}

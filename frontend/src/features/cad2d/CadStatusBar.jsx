@@ -72,7 +72,12 @@ export default function CadStatusBar({
   // Room Tagging Props (Cycle 19)
   selectedRoomType = 'LIVING',
   onChangeRoomType,
-  onAutoTagRooms
+  onAutoTagRooms,
+  // 2D MEP Clash & Penetration Sleeves Props (Cycle 20)
+  clashesCount = 0,
+  onResolveAllClashes,
+  showSleeves = true,
+  onToggleSleeves
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -272,6 +277,32 @@ export default function CadStatusBar({
           )}
         </div>
       </div>
+
+      {/* CENTER: Real-Time Multi-Discipline 2D Clash Collision Bar */}
+      {clashesCount > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(239, 68, 68, 0.18)', padding: '4px 12px', borderRadius: '6px', border: '1px solid #EF4444', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
+          <span style={{ color: '#FCA5A5', fontSize: '11px', fontWeight: 800 }}>
+            ⚠️ {clashesCount} {clashesCount === 1 ? 'CLASH' : 'CLASHES'} DETECTED
+          </span>
+          <button
+            type="button"
+            onClick={onResolveAllClashes}
+            style={{
+              padding: '3px 10px',
+              fontSize: '11px',
+              fontWeight: 800,
+              backgroundColor: '#EF4444',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+            title="Automatically install wall penetration sleeves &amp; bypass crossing services"
+          >
+            ⚡ Auto-Resolve All
+          </button>
+        </div>
+      )}
 
       {/* CENTER: Multi-Selection Floating Action Bar */}
       {multiSelection && multiSelection.length > 0 && (
@@ -1023,6 +1054,25 @@ export default function CadStatusBar({
           title="Toggle Background Grid [F7]"
         >
           GRID
+        </button>
+
+        {/* SLEEVES Toggle */}
+        <button
+          type="button"
+          onClick={onToggleSleeves}
+          style={{
+            padding: '3px 8px',
+            borderRadius: '4px',
+            backgroundColor: showSleeves ? '#D97706' : '#1E293B',
+            border: `1px solid ${showSleeves ? '#F59E0B' : '#334155'}`,
+            color: showSleeves ? '#FFFFFF' : '#94A3B8',
+            fontWeight: 700,
+            fontSize: '10.5px',
+            cursor: 'pointer'
+          }}
+          title="Toggle Wall Penetration Sleeves &amp; Fire Dampers"
+        >
+          🧱 SLEEVES {showSleeves ? 'ON' : 'OFF'}
         </button>
       </div>
     </div>

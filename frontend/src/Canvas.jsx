@@ -58,6 +58,11 @@ import {
   generateRoomTag,
   ROOM_PROFILES
 } from './features/cad2d/roomTagEngine';
+import {
+  detectMepClashes,
+  createPenetrationSleeve,
+  generateBypassDetour
+} from './features/cad2d/clashDetectionEngine';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1392,6 +1397,57 @@ export default function Canvas({
       }
     });
   }, [solveData?.rooms, onLiveItemUpdate]);
+
+  // ─── Cycle 20: 2D Multi-Discipline Clash Collision & Sleeve Engine ───────
+  const [showSleeves, setShowSleeves] = useState(true);
+  const detectedClashes = useMemo(() => {
+    return detectMepClashes(solveData, { includeWallPenetrations: true });
+  }, [solveData]);
+
+  const handleResolveAllClashes = useCallback(() => {
+    if (!detectedClashes || detectedClashes.length === 0) return;
+    let resolvedCount = 0;
+
+    detectedClashes.forEach(clash => {
+      if (clash.type === 'WALL_PENETRATION') {
+        const sleeve = createPenetrationSleeve(clash);
+        if (sleeve) {
+          onLiveItemUpdate?.('AddPenetrationSleeve', null, sleeve);
+          resolvedCount++;
+        }
+      } else if (clash.type === 'PIPE_VS_DUCT' && clash.item1?.type === 'PlumbingPipe') {
+        const pipe = (solveData?.plumbing_pipes || []).find(p => p.id === clash.item1.id);
+        if (pipe) {
+          const rawPts = (pipe.path_points || pipe.points || []).map(p => Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y });
+          const newPts = generateBypassDetour(rawPts, clash.item1.segmentIndex ?? 0, clash.point, 300);
+          onLiveItemUpdate?.('ApplyBypassDetour', pipe.id, {
+            path_points: newPts.map(p => [p.x, p.y])
+          });
+          resolvedCount++;
+        }
+      }
+    });
+  }, [detectedClashes, solveData?.plumbing_pipes, onLiveItemUpdate]);
+
+  const handleResolveSingleClash = useCallback((clash) => {
+    if (!clash) return;
+    if (clash.type === 'WALL_PENETRATION') {
+      const sleeve = createPenetrationSleeve(clash);
+      if (sleeve) {
+        onLiveItemUpdate?.('AddPenetrationSleeve', null, sleeve);
+      }
+    } else if (clash.type === 'PIPE_VS_DUCT' && clash.item1?.type === 'PlumbingPipe') {
+      const pipe = (solveData?.plumbing_pipes || []).find(p => p.id === clash.item1.id);
+      if (pipe) {
+        const rawPts = (pipe.path_points || pipe.points || []).map(p => Array.isArray(p) ? { x: p[0], y: p[1] } : { x: p.x, y: p.y });
+        const newPts = generateBypassDetour(rawPts, clash.item1.segmentIndex ?? 0, clash.point, 300);
+        onLiveItemUpdate?.('ApplyBypassDetour', pipe.id, {
+          path_points: newPts.map(p => [p.x, p.y])
+        });
+      }
+    }
+    setInternalSelectedItem(null);
+  }, [solveData?.plumbing_pipes, onLiveItemUpdate]);
 
   useEffect(() => {
     if (activeTool !== 'wall' && activeTool !== 'plumbing' && draftingState.active) {
@@ -4501,24 +4557,119 @@ export default function Canvas({
           </g>
 
           {/* LAYER_CLASH_MARKERS (Multi-Discipline BIM Spatial Clashes) */}
-          {solveData?.clash_markers && solveData.clash_markers.length > 0 && (
-            <g id="LAYER_CLASH_MARKERS" style={{ pointerEvents: 'none' }}>
-              {solveData.clash_markers.map((clash, cIdx) => {
+          {((detectedClashes && detectedClashes.length > 0) || (solveData?.clash_markers && solveData.clash_markers.length > 0)) && (
+            <g id="LAYER_CLASH_MARKERS" style={{ pointerEvents: 'auto' }}>
+              {(detectedClashes.length > 0 ? detectedClashes : (solveData?.clash_markers || [])).map((clash, cIdx) => {
                 const cx = clash.center?.x ?? clash.x ?? 0;
                 const cy = clash.center?.y ?? clash.y ?? 0;
                 const isHard = clash.severity === 'HARD';
-                const color = isHard ? '#EF4444' : '#F59E0B';
+                const isCrit = clash.severity === 'CRITICAL';
+                const color = isCrit ? '#EF4444' : (isHard ? '#F43F5E' : '#F59E0B');
+                const isSelected = selectedItem?.item?.id === clash.id && selectedItem?.type === 'Clash';
                 const r = 240;
+
                 return (
-                  <g key={`clash-${clash.id || cIdx}`} className="cad-clash-indicator">
-                    <circle cx={cx} cy={cy} r={r} fill={isHard ? "rgba(239, 68, 68, 0.25)" : "rgba(245, 158, 11, 0.25)"} stroke={color} strokeWidth={2 / zoom} strokeDasharray={`${120 / zoom} ${60 / zoom}`} />
-                    <circle cx={cx} cy={cy} r={r * 0.4} fill={color} />
+                  <g
+                    key={`clash-${clash.id || cIdx}`}
+                    className="cad-clash-indicator"
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInternalSelectedItem({ type: 'Clash', item: clash });
+                    }}
+                  >
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={r}
+                      fill={isCrit || isHard ? "rgba(239, 68, 68, 0.22)" : "rgba(245, 158, 11, 0.22)"}
+                      stroke={isSelected ? '#FFFFFF' : color}
+                      strokeWidth={(isSelected ? 3.5 : 2) / zoom}
+                      strokeDasharray={`${120 / zoom} ${60 / zoom}`}
+                    />
+                    <circle cx={cx} cy={cy} r={r * 0.35} fill={color} />
                     <g transform={`translate(${cx}, ${cy - r - 80}) scale(${1 / zoom}, ${-1 / zoom})`}>
-                      <rect x="-40" y="-10" width="80" height="20" rx="4" fill="#0A0E17" stroke={color} strokeWidth="1" />
+                      <rect x="-55" y="-12" width="110" height="24" rx="5" fill="#0A0E17" stroke={color} strokeWidth="1.5" />
                       <text x="0" y="4" textAnchor="middle" dominantBaseline="middle" fill="#FFFFFF" fontSize="9" fontWeight="800">
                         ⚠️ {clash.severity}
                       </text>
                     </g>
+                  </g>
+                );
+              })}
+            </g>
+          )}
+
+          {/* LAYER_PENETRATION_SLEEVES (IBC 714 / NFPA 90A Firestop Sleeves) */}
+          {showSleeves && solveData?.penetration_sleeves && solveData.penetration_sleeves.length > 0 && (
+            <g id="LAYER_PENETRATION_SLEEVES" style={{ pointerEvents: 'auto' }}>
+              {solveData.penetration_sleeves.map(sleeve => {
+                const isDuct = sleeve.type === 'DUCT_FIRE_DAMPER';
+                const isSelected = selectedItem?.item?.id === sleeve.id && selectedItem?.type === 'PenetrationSleeve';
+                const strokeColor = isSelected ? '#FFFFFF' : (sleeve.color || (isDuct ? '#EF4444' : '#F59E0B'));
+
+                return (
+                  <g
+                    key={sleeve.id}
+                    transform={`translate(${sleeve.x}, ${sleeve.y})`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInternalSelectedItem({ type: 'PenetrationSleeve', item: sleeve });
+                    }}
+                  >
+                    {isDuct ? (
+                      /* Rectangular Duct Fire Damper Sleeve */
+                      <g>
+                        <rect
+                          x={-(sleeve.width || 480) / 2}
+                          y={-(sleeve.height || 320) / 2}
+                          width={sleeve.width || 480}
+                          height={sleeve.height || 320}
+                          fill="rgba(239, 68, 68, 0.25)"
+                          stroke={strokeColor}
+                          strokeWidth={2 / zoom}
+                          strokeDasharray={`${8 / zoom} ${4 / zoom}`}
+                        />
+                        <line
+                          x1={-(sleeve.width || 480) / 2}
+                          y1={-(sleeve.height || 320) / 2}
+                          x2={(sleeve.width || 480) / 2}
+                          y2={(sleeve.height || 320) / 2}
+                          stroke={strokeColor}
+                          strokeWidth={1.5 / zoom}
+                        />
+                        <g transform={`scale(${1 / zoom}, ${-1 / zoom})`}>
+                          <rect x="-35" y="-10" width="70" height="20" rx="3" fill="#0F172A" stroke="#EF4444" strokeWidth="1" />
+                          <text x="0" y="4" textAnchor="middle" fill="#EF4444" fontSize="8.5" fontWeight="900">
+                            FD-2HR
+                          </text>
+                        </g>
+                      </g>
+                    ) : (
+                      /* Circular Pipe Penetration Sleeve with Annular Seal */
+                      <g>
+                        <circle
+                          r={(sleeve.diameter_mm || sleeve.width || 75) / 2}
+                          fill="rgba(245, 158, 11, 0.25)"
+                          stroke={strokeColor}
+                          strokeWidth={2 / zoom}
+                        />
+                        <circle
+                          r={(sleeve.diameter_mm || sleeve.width || 75) / 3}
+                          fill="none"
+                          stroke={strokeColor}
+                          strokeWidth={1 / zoom}
+                          strokeDasharray={`${4 / zoom} ${2 / zoom}`}
+                        />
+                        <g transform={`scale(${1 / zoom}, ${-1 / zoom})`}>
+                          <rect x="-30" y="-9" width="60" height="18" rx="3" fill="#0F172A" stroke="#F59E0B" strokeWidth="1" />
+                          <text x="0" y="4" textAnchor="middle" fill="#F59E0B" fontSize="8" fontWeight="800">
+                            SLV
+                          </text>
+                        </g>
+                      </g>
+                    )}
                   </g>
                 );
               })}
@@ -4767,6 +4918,7 @@ export default function Canvas({
             marqueeBox={marqueeBox}
             dimensionDraft={dimensionDraft}
             roomTagPreview={roomTagHover}
+            detectedClashes={detectedClashes}
           />
         </g>
       </svg>
@@ -5224,6 +5376,89 @@ export default function Canvas({
             </div>
           )}
 
+          {selectedItem.type === "Clash" && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: selectedItem.item.severity === 'CRITICAL' ? '#EF4444' : '#F59E0B' }}>
+                  ⚠️ {selectedItem.item.severity}: {selectedItem.item.type}
+                </span>
+              </div>
+              <p style={{ fontSize: 11, color: "#CBD5E1", margin: "0 0 8px 0" }}>
+                {selectedItem.item.description}
+              </p>
+              <div style={{ fontSize: 11, color: "#38BDF8", marginBottom: 10, padding: 8, backgroundColor: "#0F172A", borderRadius: 4, border: "1px solid #1E293B" }}>
+                💡 <b>Recommendation:</b> {selectedItem.item.recommendedAction}
+              </div>
+
+              {selectedItem.item.type === 'WALL_PENETRATION' && (
+                <button
+                  type="button"
+                  onClick={() => handleResolveSingleClash(selectedItem.item)}
+                  style={{
+                    width: "100%",
+                    padding: "7px 12px",
+                    backgroundColor: "#059669",
+                    color: "white",
+                    fontWeight: 700,
+                    fontSize: 11,
+                    border: "none",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    marginBottom: 6
+                  }}
+                >
+                  🧱 Install Fire-Rated Wall Sleeve (IBC 714)
+                </button>
+              )}
+
+              {selectedItem.item.type === 'PIPE_VS_DUCT' && (
+                <button
+                  type="button"
+                  onClick={() => handleResolveSingleClash(selectedItem.item)}
+                  style={{
+                    width: "100%",
+                    padding: "7px 12px",
+                    backgroundColor: "#0284C7",
+                    color: "white",
+                    fontWeight: 700,
+                    fontSize: 11,
+                    border: "none",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    marginBottom: 6
+                  }}
+                >
+                  ⤴️ Apply 45° Elevation Bypass Detour
+                </button>
+              )}
+            </div>
+          )}
+
+          {selectedItem.type === "PenetrationSleeve" && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11, backgroundColor: "#0F172A", padding: 8, borderRadius: 6, border: "1px solid #334155" }}>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Type:</span>
+                  <div style={{ color: "#F59E0B", fontWeight: 700 }}>{selectedItem.item.type}</div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Fire Rating:</span>
+                  <div style={{ color: "#EF4444", fontWeight: 700 }}>{selectedItem.item.fireRatingHours || 2} Hours</div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Size:</span>
+                  <div style={{ color: "#F8FAFC", fontWeight: 600 }}>
+                    {selectedItem.item.diameter_mm ? `Ø${selectedItem.item.diameter_mm} mm` : `${selectedItem.item.width}×${selectedItem.item.height} mm`}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Service:</span>
+                  <div style={{ color: "#38BDF8", fontWeight: 600 }}>{selectedItem.item.serviceType || 'MEP'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #334155", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <button
               type="button"
@@ -5242,6 +5477,7 @@ export default function Canvas({
                 else if (type === "Door" || type === "Window") onLiveItemUpdate?.("DeleteOpening", id);
                 else if (type === "Dimension") onLiveItemUpdate?.("DeleteDimension", id);
                 else if (type === "RoomTag") onLiveItemUpdate?.("DeleteRoomTag", id);
+                else if (type === "PenetrationSleeve") onLiveItemUpdate?.("DeletePenetrationSleeve", id);
                 setInternalSelectedItem(null);
               }}
               style={{
@@ -5519,6 +5755,10 @@ export default function Canvas({
         selectedRoomType={selectedRoomType}
         onChangeRoomType={setSelectedRoomType}
         onAutoTagRooms={handleAutoTagRooms}
+        clashesCount={detectedClashes.length}
+        onResolveAllClashes={handleResolveAllClashes}
+        showSleeves={showSleeves}
+        onToggleSleeves={() => setShowSleeves(prev => !prev)}
       />
     </div>
   );
