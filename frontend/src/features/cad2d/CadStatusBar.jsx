@@ -85,7 +85,11 @@ export default function CadStatusBar({
   // 2D Thermal Zone Modeling (Cycle 23)
   showThermalHeatmap = false,
   onToggleThermalHeatmap,
-  onOpenThermalStudio
+  onOpenThermalStudio,
+  // 2D Electrical Load & Solar PV Studio (Cycle 24)
+  showSolarPv = false,
+  onToggleSolarPv,
+  onOpenElectricalPvStudio
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -1182,6 +1186,54 @@ export default function CadStatusBar({
           >
             <span>🌡️</span>
             <span>THERMAL</span>
+          </button>
+        )}
+
+        {/* SOLAR PV TOGGLE (Cycle 24) */}
+        {onToggleSolarPv && (
+          <button
+            type="button"
+            onClick={onToggleSolarPv}
+            style={{
+              padding: '3px 8px',
+              borderRadius: '4px',
+              backgroundColor: showSolarPv ? '#0284C7' : '#1E293B',
+              border: `1px solid ${showSolarPv ? '#38BDF8' : '#334155'}`,
+              color: showSolarPv ? '#FFFFFF' : '#94A3B8',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer'
+            }}
+            title="Toggle 2D Rooftop Solar Photovoltaic (PV) Array & DC String Routing"
+          >
+            ☀️ SOLAR {showSolarPv ? 'ON' : 'OFF'}
+          </button>
+        )}
+
+        {/* ELECTRICAL & PV STUDIO (Cycle 24) */}
+        {onOpenElectricalPvStudio && (
+          <button
+            type="button"
+            onClick={onOpenElectricalPvStudio}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '4px',
+              backgroundColor: '#0D9488',
+              border: '1px solid #2DD4BF',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 0 10px rgba(45, 212, 191, 0.35)',
+              transition: 'all 0.15s ease'
+            }}
+            title="Open 3-Phase Electrical Load Balancing & Solar PV Studio"
+          >
+            <span>⚡</span>
+            <span>ELEC &amp; PV</span>
           </button>
         )}
       </div>

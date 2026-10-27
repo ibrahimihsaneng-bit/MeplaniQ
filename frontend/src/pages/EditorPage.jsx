@@ -51,6 +51,7 @@ import AutonomousSprintTimer from '../features/mep/AutonomousSprintTimer';
 import CadSheetLayoutModal from '../features/cad2d/CadSheetLayoutModal';
 import AutoCadLispStudioModal from '../features/cad2d/AutoCadLispStudioModal';
 import ThermalZoneStudioModal from '../features/cad2d/ThermalZoneStudioModal';
+import ElectricalLoadPvStudioModal from '../features/cad2d/ElectricalLoadPvStudioModal';
 import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
 import { downloadIfc4Model } from '../features/mep/ifcExportBridge';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
@@ -103,6 +104,8 @@ export default function EditorPage() {
   const [isLispStudioOpen, setIsLispStudioOpen] = useState(false);
   const [showThermalHeatmap, setShowThermalHeatmap] = useState(false);
   const [isThermalStudioOpen, setIsThermalStudioOpen] = useState(false);
+  const [showSolarPv, setShowSolarPv] = useState(false);
+  const [isElectricalPvStudioOpen, setIsElectricalPvStudioOpen] = useState(false);
 
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -2245,7 +2248,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={23} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={24} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2526,6 +2529,31 @@ export default function EditorPage() {
             title="Open 2D Thermal Zone & Space Boundary Studio (ASHRAE Cooling/Heating Loads & CFM)"
           >
             <span>🌡️ Thermal</span>
+          </button>
+
+          {/* ⚡ 3-Phase Electrical Load & Solar PV Studio (Cycle 24) */}
+          <button
+            onClick={() => setIsElectricalPvStudioOpen(true)}
+            disabled={!solveData}
+            style={{
+              background: 'linear-gradient(135deg, #0D9488 0%, #0F766E 100%)',
+              border: '1px solid #2DD4BF',
+              color: '#FFFFFF',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(45, 212, 191, 0.4)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Open 3-Phase Electrical Load Balancing & Solar PV Rooftop Studio (NEC 220 / IEEE 1547)"
+          >
+            <span>⚡ Elec &amp; PV</span>
           </button>
 
           {/* 🚰 Advanced Plumbing & Hydraulics Suite */}
@@ -3151,6 +3179,9 @@ export default function EditorPage() {
                   showThermalHeatmap={showThermalHeatmap}
                   onToggleThermalHeatmap={() => setShowThermalHeatmap(prev => !prev)}
                   onOpenThermalStudio={() => setIsThermalStudioOpen(true)}
+                  showSolarPv={showSolarPv}
+                  onToggleSolarPv={() => setShowSolarPv(prev => !prev)}
+                  onOpenElectricalPvStudio={() => setIsElectricalPvStudioOpen(true)}
                   onCursorMove={setCursorCoords}
                   viewTransform={viewTransform}
                   setViewTransform={setViewTransform}
@@ -3370,6 +3401,16 @@ export default function EditorPage() {
         solveData={solveData}
         showThermalHeatmap={showThermalHeatmap}
         onToggleThermalHeatmap={() => setShowThermalHeatmap(prev => !prev)}
+        projectName={solveData?.project_name || 'Floorplan'}
+      />
+
+      {/* 2D 3-Phase Electrical Load & Solar PV Studio Modal (Cycle 24) */}
+      <ElectricalLoadPvStudioModal
+        isOpen={isElectricalPvStudioOpen}
+        onClose={() => setIsElectricalPvStudioOpen(false)}
+        solveData={solveData}
+        showSolarPv={showSolarPv}
+        onToggleSolarPv={() => setShowSolarPv(prev => !prev)}
         projectName={solveData?.project_name || 'Floorplan'}
       />
 

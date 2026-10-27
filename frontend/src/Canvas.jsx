@@ -64,6 +64,7 @@ import {
   generateBypassDetour
 } from './features/cad2d/clashDetectionEngine';
 import { compileFloorplanThermalZones } from './features/cad2d/thermalZoneEngine';
+import { generateRooftopPvArray } from './features/cad2d/solarPvLayoutEngine';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1029,7 +1030,10 @@ export default function Canvas({
   onOpenLispStudio,
   showThermalHeatmap = false,
   onToggleThermalHeatmap,
-  onOpenThermalStudio
+  onOpenThermalStudio,
+  showSolarPv = false,
+  onToggleSolarPv,
+  onOpenElectricalPvStudio
 }) {
   const svgRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -1063,6 +1067,12 @@ export default function Canvas({
     if (!showThermalHeatmap) return { zones: [] };
     return compileFloorplanThermalZones(solveData);
   }, [showThermalHeatmap, solveData]);
+
+  // 2D Solar PV Rooftop Array (Cycle 24)
+  const solarPvData = useMemo(() => {
+    if (!showSolarPv) return { modules: [], strings: [], inverters: [], metrics: {} };
+    return generateRooftopPvArray(solveData);
+  }, [showSolarPv, solveData]);
 
   // On-Canvas Real-Time Plumbing & Hydraulics KPI Metrics
   const canvasPlumbingKpi = useMemo(() => {
@@ -4596,6 +4606,135 @@ export default function Canvas({
             </g>
           )}
 
+          {/* LAYER_SOLAR_PV (Cycle 24: 2D Rooftop Solar Photovoltaic Array & DC String Routing) */}
+          {showSolarPv && (
+            <g id="LAYER_SOLAR_PV" style={{ pointerEvents: 'auto' }}>
+              {/* 1. DC Series String Interconnection Lines */}
+              {solarPvData.strings.map((str, sIdx) => {
+                const ptsStr = str.wiringPoints.map(p => `${p.x},${p.y}`).join(' ');
+                return (
+                  <g key={`pv-string-${str.id || sIdx}`}>
+                    <polyline
+                      points={ptsStr}
+                      fill="none"
+                      stroke="#FACC15"
+                      strokeWidth={2.5 / zoom}
+                      strokeDasharray={`${8 / zoom} ${4 / zoom}`}
+                    />
+                    {/* Positive & Negative String Homerun Terminals */}
+                    <circle cx={str.positiveTerminal.x} cy={str.positiveTerminal.y} r={120 / zoom} fill="#EF4444" stroke="#FFFFFF" strokeWidth={1 / zoom} />
+                    <circle cx={str.negativeTerminal.x} cy={str.negativeTerminal.y} r={120 / zoom} fill="#3B82F6" stroke="#FFFFFF" strokeWidth={1 / zoom} />
+                  </g>
+                );
+              })}
+
+              {/* 2. PV Modules */}
+              {solarPvData.modules.map((m, mIdx) => (
+                <g key={`pv-mod-${m.id || mIdx}`}>
+                  {/* Module Aluminum Outer Frame */}
+                  <rect
+                    x={m.x}
+                    y={m.y}
+                    width={m.width}
+                    height={m.height}
+                    rx={3}
+                    fill="#0F172A"
+                    stroke="#0284C7"
+                    strokeWidth={1.5 / zoom}
+                  />
+
+                  {/* Silicon Solar Cells Gridlines */}
+                  <line
+                    x1={m.x + m.width * 0.5}
+                    y1={m.y}
+                    x2={m.x + m.width * 0.5}
+                    y2={m.y + m.height}
+                    stroke="#1E3A8A"
+                    strokeWidth={1 / zoom}
+                  />
+                  <line
+                    x1={m.x}
+                    y1={m.y + m.height * 0.33}
+                    x2={m.x + m.width}
+                    y2={m.y + m.height * 0.33}
+                    stroke="#1E3A8A"
+                    strokeWidth={1 / zoom}
+                  />
+                  <line
+                    x1={m.x}
+                    y1={m.y + m.height * 0.67}
+                    x2={m.x + m.width}
+                    y2={m.y + m.height * 0.67}
+                    stroke="#1E3A8A"
+                    strokeWidth={1 / zoom}
+                  />
+
+                  {/* Center Module Label Tag */}
+                  <g transform={`translate(${m.centerX}, ${m.centerY})`}>
+                    <g transform={`scale(${1 / zoom}, ${-1 / zoom})`} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                      <rect
+                        x="-30"
+                        y="-10"
+                        width="60"
+                        height="20"
+                        rx="4"
+                        fill="rgba(15, 23, 42, 0.85)"
+                        stroke="#0284C7"
+                        strokeWidth="1"
+                      />
+                      <text
+                        y="3"
+                        textAnchor="middle"
+                        fill="#38BDF8"
+                        fontSize="8.5"
+                        fontWeight="800"
+                        fontFamily="monospace"
+                      >
+                        {m.id}
+                      </text>
+                    </g>
+                  </g>
+                </g>
+              ))}
+
+              {/* 3. Inverter Equipment Symbol */}
+              {solarPvData.inverters.map((inv, iIdx) => (
+                <g key={`pv-inv-${inv.id || iIdx}`} transform={`translate(${inv.x}, ${inv.y})`}>
+                  <rect
+                    x="0"
+                    y="0"
+                    width={700}
+                    height={450}
+                    rx={8}
+                    fill="#0F172A"
+                    stroke="#10B981"
+                    strokeWidth={2.5 / zoom}
+                  />
+                  <g transform={`translate(350, 225) scale(${1 / zoom}, ${-1 / zoom})`} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                    <text
+                      y="-8"
+                      textAnchor="middle"
+                      fill="#10B981"
+                      fontSize="10"
+                      fontWeight="900"
+                    >
+                      ⚡ {inv.id}
+                    </text>
+                    <text
+                      y="8"
+                      textAnchor="middle"
+                      fill="#F8FAFC"
+                      fontSize="9"
+                      fontWeight="700"
+                    >
+                      {inv.name}
+                    </text>
+                  </g>
+                </g>
+              ))}
+            </g>
+          )}
+
           {/* LAYER_ANNOTATIONS */}
           <g
             id="LAYER_ANNOTATIONS"
@@ -5845,6 +5984,9 @@ export default function Canvas({
         showThermalHeatmap={showThermalHeatmap}
         onToggleThermalHeatmap={onToggleThermalHeatmap}
         onOpenThermalStudio={onOpenThermalStudio}
+        showSolarPv={showSolarPv}
+        onToggleSolarPv={onToggleSolarPv}
+        onOpenElectricalPvStudio={onOpenElectricalPvStudio}
       />
     </div>
   );
