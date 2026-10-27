@@ -79,7 +79,9 @@ export default function CadStatusBar({
   showSleeves = true,
   onToggleSleeves,
   // Multi-Page Titleblock Sheet Studio (Cycle 21)
-  onOpenSheetStudio
+  onOpenSheetStudio,
+  // Native AutoCAD AutoLISP Studio (Cycle 22)
+  onOpenLispStudio
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -1101,6 +1103,33 @@ export default function CadStatusBar({
           >
             <span>📄</span>
             <span>SHEETS</span>
+          </button>
+        )}
+
+        {/* AUTOCAD AUTOLISP STUDIO (Cycle 22) */}
+        {onOpenLispStudio && (
+          <button
+            type="button"
+            onClick={onOpenLispStudio}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '4px',
+              backgroundColor: '#4338CA',
+              border: '1px solid #818CF8',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 0 10px rgba(129, 140, 248, 0.35)',
+              transition: 'all 0.15s ease'
+            }}
+            title="Open Autodesk AutoCAD AutoLISP (.lsp) & Script (.scr) Compiler Studio"
+          >
+            <span>⚙️</span>
+            <span>LISP</span>
           </button>
         )}
       </div>

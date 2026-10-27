@@ -1024,7 +1024,8 @@ export default function Canvas({
   selectedItem: controlledSelectedItem,
   onSelectItem,
   onOpenPlumbingModal,
-  onOpenSheetStudio
+  onOpenSheetStudio,
+  onOpenLispStudio
 }) {
   const svgRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -5761,6 +5762,7 @@ export default function Canvas({
         showSleeves={showSleeves}
         onToggleSleeves={() => setShowSleeves(prev => !prev)}
         onOpenSheetStudio={onOpenSheetStudio}
+        onOpenLispStudio={onOpenLispStudio}
       />
     </div>
   );

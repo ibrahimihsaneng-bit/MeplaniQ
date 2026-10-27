@@ -49,6 +49,7 @@ import PlumbingEngineeringModal from '../features/mep/PlumbingEngineeringModal';
 import MepCalculationModal from '../features/mep/MepCalculationModal';
 import AutonomousSprintTimer from '../features/mep/AutonomousSprintTimer';
 import CadSheetLayoutModal from '../features/cad2d/CadSheetLayoutModal';
+import AutoCadLispStudioModal from '../features/cad2d/AutoCadLispStudioModal';
 import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
 import { downloadIfc4Model } from '../features/mep/ifcExportBridge';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
@@ -98,6 +99,7 @@ export default function EditorPage() {
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
   const [isInspectorExpanded, setIsInspectorExpanded] = useState(false);
   const [isSheetLayoutModalOpen, setIsSheetLayoutModalOpen] = useState(false);
+  const [isLispStudioOpen, setIsLispStudioOpen] = useState(false);
 
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -2240,7 +2242,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={21} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={22} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2471,6 +2473,31 @@ export default function EditorPage() {
             title="Open Architectural & MEP Titleblock Sheet Studio (ISO 7200 / ANSI Y14.1 Drawing Sets & Vector PDF Printing)"
           >
             <span>📄 Sheets</span>
+          </button>
+
+          {/* ⚙️ AutoCAD AutoLISP & Script Studio (Cycle 22) */}
+          <button
+            onClick={() => setIsLispStudioOpen(true)}
+            disabled={!solveData}
+            style={{
+              background: 'linear-gradient(135deg, #4338CA 0%, #3730A3 100%)',
+              border: '1px solid #818CF8',
+              color: '#FFFFFF',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(67, 56, 202, 0.4)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Open Autodesk AutoCAD AutoLISP (.lsp) & Script (.scr) Compiler Studio"
+          >
+            <span>⚙️ AutoLISP</span>
           </button>
 
           {/* 🚰 Advanced Plumbing & Hydraulics Suite */}
@@ -3092,6 +3119,7 @@ export default function EditorPage() {
                   onLiveItemUpdate={handleLiveItemUpdate}
                   onOpenPlumbingModal={() => setIsPlumbingModalOpen(true)}
                   onOpenSheetStudio={() => setIsSheetLayoutModalOpen(true)}
+                  onOpenLispStudio={() => setIsLispStudioOpen(true)}
                   onCursorMove={setCursorCoords}
                   viewTransform={viewTransform}
                   setViewTransform={setViewTransform}
@@ -3294,6 +3322,14 @@ export default function EditorPage() {
           name: solveData?.project_name || 'Floorplan',
           id: solveData?.project_id || id
         }}
+      />
+
+      {/* AutoCAD AutoLISP & Script Compiler Studio Modal (Cycle 22) */}
+      <AutoCadLispStudioModal
+        isOpen={isLispStudioOpen}
+        onClose={() => setIsLispStudioOpen(false)}
+        solveData={solveData}
+        projectName={solveData?.project_name || 'Floorplan'}
       />
 
       {/* Multi-Discipline BIM Clash Matrix Drawer */}
