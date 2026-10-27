@@ -77,7 +77,9 @@ export default function CadStatusBar({
   clashesCount = 0,
   onResolveAllClashes,
   showSleeves = true,
-  onToggleSleeves
+  onToggleSleeves,
+  // Multi-Page Titleblock Sheet Studio (Cycle 21)
+  onOpenSheetStudio
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -1070,10 +1072,37 @@ export default function CadStatusBar({
             fontSize: '10.5px',
             cursor: 'pointer'
           }}
-          title="Toggle Wall Penetration Sleeves &amp; Fire Dampers"
+          title="Toggle Wall Penetration Sleeves & Fire Dampers"
         >
           🧱 SLEEVES {showSleeves ? 'ON' : 'OFF'}
         </button>
+
+        {/* TITLEBLOCK SHEETS STUDIO (Cycle 21) */}
+        {onOpenSheetStudio && (
+          <button
+            type="button"
+            onClick={onOpenSheetStudio}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '4px',
+              backgroundColor: '#0284C7',
+              border: '1px solid #38BDF8',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 0 10px rgba(56, 189, 248, 0.35)',
+              transition: 'all 0.15s ease'
+            }}
+            title="Open Architectural & MEP Titleblock Sheet Studio (A1/A0/Arch D Print Sets)"
+          >
+            <span>📄</span>
+            <span>SHEETS</span>
+          </button>
+        )}
       </div>
     </div>
   );

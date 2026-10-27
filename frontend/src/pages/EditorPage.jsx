@@ -48,6 +48,7 @@ import AutoMepModal from '../features/mep/AutoMepModal';
 import PlumbingEngineeringModal from '../features/mep/PlumbingEngineeringModal';
 import MepCalculationModal from '../features/mep/MepCalculationModal';
 import AutonomousSprintTimer from '../features/mep/AutonomousSprintTimer';
+import CadSheetLayoutModal from '../features/cad2d/CadSheetLayoutModal';
 import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
 import { downloadIfc4Model } from '../features/mep/ifcExportBridge';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
@@ -96,6 +97,7 @@ export default function EditorPage() {
   const [is3DViewActive, setIs3DViewActive] = useState(false);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
   const [isInspectorExpanded, setIsInspectorExpanded] = useState(false);
+  const [isSheetLayoutModalOpen, setIsSheetLayoutModalOpen] = useState(false);
 
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -2238,7 +2240,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={20} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={21} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2444,6 +2446,31 @@ export default function EditorPage() {
             title="Open MEP Engineering Calculation Sheet (ASHRAE Duct Aerodynamics, 3-Phase DB Schedule, UPC Hydraulics, BOQ)"
           >
             <span>📐 Calc Sheet</span>
+          </button>
+
+          {/* 📄 Paper Space Sheet Layout Studio */}
+          <button
+            onClick={() => setIsSheetLayoutModalOpen(true)}
+            disabled={!solveData}
+            style={{
+              background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+              border: '1px solid #38BDF8',
+              color: '#FFFFFF',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(2, 132, 199, 0.4)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Open Architectural & MEP Titleblock Sheet Studio (ISO 7200 / ANSI Y14.1 Drawing Sets & Vector PDF Printing)"
+          >
+            <span>📄 Sheets</span>
           </button>
 
           {/* 🚰 Advanced Plumbing & Hydraulics Suite */}
@@ -3064,6 +3091,7 @@ export default function EditorPage() {
                   isResizeModeActive={isResizeModeActive}
                   onLiveItemUpdate={handleLiveItemUpdate}
                   onOpenPlumbingModal={() => setIsPlumbingModalOpen(true)}
+                  onOpenSheetStudio={() => setIsSheetLayoutModalOpen(true)}
                   onCursorMove={setCursorCoords}
                   viewTransform={viewTransform}
                   setViewTransform={setViewTransform}
@@ -3255,6 +3283,17 @@ export default function EditorPage() {
         onClose={() => setIsCalcModalOpen(false)}
         solveData={solveData}
         projectName={solveData?.project_name || 'Project'}
+      />
+
+      {/* Paper Space Architectural & MEP Titleblock Sheet Studio (Cycle 21) */}
+      <CadSheetLayoutModal
+        isOpen={isSheetLayoutModalOpen}
+        onClose={() => setIsSheetLayoutModalOpen(false)}
+        solveData={solveData}
+        projectMetadata={{
+          name: solveData?.project_name || 'Floorplan',
+          id: solveData?.project_id || id
+        }}
       />
 
       {/* Multi-Discipline BIM Clash Matrix Drawer */}
