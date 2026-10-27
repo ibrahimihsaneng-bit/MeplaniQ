@@ -7,6 +7,17 @@ import {
   DISCIPLINE_CONFIG,
   getDisciplineVisualState
 } from './features/discipline/disciplineTypes';
+import CadCursorOverlay from './features/cad2d/CadCursorOverlay';
+import CadStatusBar from './features/cad2d/CadStatusBar';
+import { findNearestOsnap } from './features/cad2d/osnapEngine';
+import {
+  applyOrthoConstraint,
+  applyPolarConstraint,
+  detectClosestWall,
+  computePolygonAreaSqm,
+  createWallPolygonFromLine,
+  ptDist
+} from './features/cad2d/cadDrawingUtils';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1041,10 +1052,116 @@ export default function Canvas({
   const [tapeEnd, setTapeEnd] = useState(null);
   const [tapeHover, setTapeHover] = useState(null);
 
+  // ─── 2D CAD Drafting, OSNAP & Smart Hosting Engine ────────────────────────
+  const [orthoActive, setOrthoActive] = useState(false);
+  const [osnapActive, setOsnapActive] = useState(true);
+  const [polarActive, setPolarActive] = useState(false);
+  const [internalShowGrid, setInternalShowGrid] = useState(showGrid);
+  const [cadCursorPt, setCadCursorPt] = useState({ x: 0, y: 0 });
+  const [osnapPt, setOsnapPt] = useState(null);
+  const [closestWall, setClosestWall] = useState(null);
+  const [doorConfig, setDoorConfig] = useState({ width: 900, flipSwing: false, flipHinge: false });
+  const [windowConfig, setWindowConfig] = useState({ width: 1200 });
+
+  const [draftingState, setDraftingState] = useState({
+    active: false,
+    tool: null,
+    points: [],
+    isNearStart: false
+  });
+
+  const handleCloseRoomLoop = useCallback(() => {
+    if (!draftingState.points || draftingState.points.length < 3) return;
+    const pts = draftingState.points.map(p => [Math.round(p.x), Math.round(p.y)]);
+    const existingRooms = solveData?.rooms || [];
+    const newName = `Room ${existingRooms.length + 1}`;
+    const area = computePolygonAreaSqm(draftingState.points);
+
+    onLiveItemUpdate?.('AddRoom', null, {
+      name: newName,
+      points: pts,
+      filleted_points: pts,
+      area_sqm: area
+    });
+
+    setDraftingState({ active: false, tool: null, points: [], isNearStart: false });
+  }, [draftingState.points, solveData?.rooms, onLiveItemUpdate]);
+
+  const handleFinishWallChain = useCallback(() => {
+    if (!draftingState.points || draftingState.points.length < 2) return;
+    if (draftingState.points.length >= 3) {
+      handleCloseRoomLoop();
+      return;
+    }
+    const p1 = draftingState.points[0];
+    const p2 = draftingState.points[1];
+    const wallPoly = createWallPolygonFromLine(p1, p2, 200);
+    const existingRooms = solveData?.rooms || [];
+    const newName = `Wall ${existingRooms.length + 1}`;
+
+    onLiveItemUpdate?.('AddRoom', null, {
+      name: newName,
+      points: wallPoly,
+      filleted_points: wallPoly,
+      area_sqm: computePolygonAreaSqm(wallPoly)
+    });
+
+    setDraftingState({ active: false, tool: null, points: [], isNearStart: false });
+  }, [draftingState.points, handleCloseRoomLoop, solveData?.rooms, onLiveItemUpdate]);
+
+  const handleCancelDrafting = useCallback(() => {
+    setDraftingState({ active: false, tool: null, points: [], isNearStart: false });
+  }, []);
+
+  useEffect(() => {
+    if (activeTool !== 'wall' && draftingState.active) {
+      setDraftingState({ active: false, tool: null, points: [], isNearStart: false });
+    }
+  }, [activeTool, draftingState.active]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target?.tagName)) return;
-      if (e.key === 'm' || e.key === 'M') {
+      if (e.key === 'F8') {
+        e.preventDefault();
+        setOrthoActive(prev => !prev);
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        setOsnapActive(prev => !prev);
+      } else if (e.key === 'F10') {
+        e.preventDefault();
+        setPolarActive(prev => !prev);
+      } else if (e.key === 'F7') {
+        e.preventDefault();
+        setInternalShowGrid(prev => !(prev ?? showGrid));
+      } else if (e.key === 'c' || e.key === 'C') {
+        if (draftingState.active && draftingState.points?.length >= 3) {
+          e.preventDefault();
+          handleCloseRoomLoop();
+        }
+      } else if (e.key === 'Enter') {
+        if (draftingState.active && draftingState.points?.length >= 2) {
+          e.preventDefault();
+          handleFinishWallChain();
+        }
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (activeTool === 'door') {
+          setDoorConfig(prev => ({ ...prev, flipSwing: !prev.flipSwing }));
+        }
+      } else if (e.key === ' ') {
+        if (activeTool === 'door') {
+          e.preventDefault();
+          setDoorConfig(prev => ({ ...prev, flipHinge: !prev.flipHinge }));
+        }
+      } else if (e.key === '[') {
+        if (activeTool === 'door') {
+          setDoorConfig(prev => ({ ...prev, width: Math.max(600, prev.width - 50) }));
+        }
+      } else if (e.key === ']') {
+        if (activeTool === 'door') {
+          setDoorConfig(prev => ({ ...prev, width: Math.min(2400, prev.width + 50) }));
+        }
+      } else if (e.key === 'm' || e.key === 'M') {
         setTapeMeasureActive(prev => {
           if (prev) {
             setTapeStart(null);
@@ -1055,7 +1172,9 @@ export default function Canvas({
           return true;
         });
       } else if (e.key === 'Escape') {
-        if (tapeMeasureActive || tapeStart) {
+        if (draftingState.active) {
+          handleCancelDrafting();
+        } else if (tapeMeasureActive || tapeStart) {
           setTapeMeasureActive(false);
           setTapeStart(null);
           setTapeEnd(null);
@@ -1080,7 +1199,7 @@ export default function Canvas({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem]);
+  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem, draftingState, handleCloseRoomLoop, handleFinishWallChain, handleCancelDrafting, showGrid, activeTool]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -1111,8 +1230,52 @@ export default function Canvas({
 
   const handleMouseMove = (e) => {
     const coords = getSvgCoordinates(e);
+    if (onCursorMove) onCursorMove(coords);
+
     if (tapeMeasureActive && tapeStart && !tapeEnd) {
       setTapeHover(coords);
+    }
+
+    // ─── 2D CAD Snapping & Geometry Analysis ─────────────────────────────────
+    const lastDraftPt = (draftingState.active && draftingState.points?.length > 0)
+      ? draftingState.points[draftingState.points.length - 1]
+      : null;
+
+    const snapResult = findNearestOsnap(coords, solveData, zoom, {
+      enabled: osnapActive,
+      activeStartPoint: lastDraftPt,
+      enableGridSnap: true,
+      gridSize: 100
+    });
+    setOsnapPt(snapResult);
+
+    // Apply Ortho or Polar if drawing
+    let effectivePt = snapResult ? snapResult.point : coords;
+    if (!snapResult && lastDraftPt) {
+      if (orthoActive) {
+        effectivePt = applyOrthoConstraint(lastDraftPt, coords, e.shiftKey);
+      } else if (polarActive) {
+        effectivePt = applyPolarConstraint(lastDraftPt, coords, 45);
+      }
+    }
+    setCadCursorPt(effectivePt);
+
+    // Check loop closure if drafting walls
+    if (draftingState.active && draftingState.points?.length >= 3) {
+      const startPt = draftingState.points[0];
+      const distToStart = ptDist(effectivePt, startPt);
+      const isNear = distToStart < (25 / zoom);
+      if (isNear !== draftingState.isNearStart) {
+        setDraftingState(prev => ({ ...prev, isNearStart: isNear }));
+      }
+    }
+
+    // Wall hosting for doors and windows
+    if (activeTool === 'door' || activeTool === 'window') {
+      const wallHit = detectClosestWall(effectivePt, solveData, 350 / zoom);
+      setClosestWall(wallHit);
+    } else if (closestWall) {
+      setClosestWall(null);
     }
 
     if (dragState) {
@@ -1203,6 +1366,106 @@ export default function Canvas({
       } else {
         setTapeEnd(pt);
         setTapeHover(null);
+      }
+      return;
+    }
+
+    // Middle click OR Alt+LeftClick always initiates CAD Panning
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
+    // Interactive 2D Wall Drafting
+    if (activeTool === 'wall' && e.button === 0) {
+      const targetPt = osnapPt ? osnapPt.point : cadCursorPt;
+
+      if (!draftingState.active) {
+        setDraftingState({
+          active: true,
+          tool: 'wall',
+          points: [targetPt],
+          isNearStart: false
+        });
+      } else {
+        if (draftingState.isNearStart && draftingState.points?.length >= 3) {
+          handleCloseRoomLoop();
+        } else {
+          setDraftingState(prev => ({
+            ...prev,
+            points: [...(prev.points || []), targetPt]
+          }));
+        }
+      }
+      return;
+    }
+
+    // Smart Wall-Hosted Door Placement
+    if (activeTool === 'door' && e.button === 0) {
+      if (closestWall && onLiveItemUpdate) {
+        const segLen = closestWall.wallLength;
+        const offset = Math.max(100, Math.min(segLen - 100, Math.round(closestWall.t * segLen)));
+        const isHoriz = Math.abs(closestWall.segment.b.y - closestWall.segment.a.y) < Math.abs(closestWall.segment.b.x - closestWall.segment.a.x);
+        const hostRoomObj = (solveData?.rooms || []).find(r => r.name === closestWall.hostRoom);
+        let wallSide = "Bottom";
+        if (hostRoomObj && hostRoomObj.points) {
+          const ys = hostRoomObj.points.map(p => p[1]);
+          const xs = hostRoomObj.points.map(p => p[0]);
+          const midY = (Math.min(...ys) + Math.max(...ys)) / 2;
+          const midX = (Math.min(...xs) + Math.max(...xs)) / 2;
+          wallSide = isHoriz ? (closestWall.projectedPoint.y < midY ? "Bottom" : "Top") : (closestWall.projectedPoint.x < midX ? "Left" : "Right");
+        } else {
+          wallSide = isHoriz ? "Bottom" : "Left";
+        }
+
+        const dCount = (solveData?.doors?.length || 0) + 1;
+        const dId = `D-${dCount}`;
+        onLiveItemUpdate('AddDoor', null, {
+          id: dId,
+          name: `Door ${dId}`,
+          type: 'Door',
+          host_room: closestWall.hostRoom,
+          wall_side: wallSide,
+          offset_mm: offset,
+          width_mm: doorConfig.width || 900,
+          height_mm: 2100,
+          swing: `${doorConfig.flipSwing ? 'Outward' : 'Inward'}-${doorConfig.flipHinge ? 'Left' : 'Right'}`
+        });
+      }
+      return;
+    }
+
+    // Smart Wall-Hosted Window Placement
+    if (activeTool === 'window' && e.button === 0) {
+      if (closestWall && onLiveItemUpdate) {
+        const segLen = closestWall.wallLength;
+        const offset = Math.max(100, Math.min(segLen - 100, Math.round(closestWall.t * segLen)));
+        const isHoriz = Math.abs(closestWall.segment.b.y - closestWall.segment.a.y) < Math.abs(closestWall.segment.b.x - closestWall.segment.a.x);
+        const hostRoomObj = (solveData?.rooms || []).find(r => r.name === closestWall.hostRoom);
+        let wallSide = "Top";
+        if (hostRoomObj && hostRoomObj.points) {
+          const ys = hostRoomObj.points.map(p => p[1]);
+          const xs = hostRoomObj.points.map(p => p[0]);
+          const midY = (Math.min(...ys) + Math.max(...ys)) / 2;
+          const midX = (Math.min(...xs) + Math.max(...xs)) / 2;
+          wallSide = isHoriz ? (closestWall.projectedPoint.y < midY ? "Bottom" : "Top") : (closestWall.projectedPoint.x < midX ? "Left" : "Right");
+        } else {
+          wallSide = isHoriz ? "Top" : "Right";
+        }
+
+        const wCount = (solveData?.windows?.length || 0) + 1;
+        const wId = `W-${wCount}`;
+        onLiveItemUpdate('AddWindow', null, {
+          id: wId,
+          name: `Window ${wId}`,
+          type: 'Window',
+          host_room: closestWall.hostRoom,
+          wall_side: wallSide,
+          offset_mm: offset,
+          width_mm: windowConfig.width || 1200,
+          height_mm: 1200
+        });
       }
       return;
     }
@@ -3618,6 +3881,17 @@ export default function Canvas({
               </g>
             );
           })()}
+          {/* CAD 2D Drafting, OSNAP & Smart Hosting Overlay */}
+          <CadCursorOverlay
+            zoom={zoom}
+            cursorPt={cadCursorPt}
+            osnapPt={osnapPt}
+            activeTool={activeTool}
+            draftingState={draftingState}
+            closestWall={closestWall}
+            doorConfig={doorConfig}
+            windowConfig={windowConfig}
+          />
         </g>
       </svg>
 
@@ -4169,6 +4443,24 @@ export default function Canvas({
           </div>
         )}
       </div>
+
+      {/* Floating CAD Status Bar */}
+      <CadStatusBar
+        cursorCoords={cadCursorPt}
+        orthoActive={orthoActive}
+        onToggleOrtho={() => setOrthoActive(prev => !prev)}
+        osnapActive={osnapActive}
+        onToggleOsnap={() => setOsnapActive(prev => !prev)}
+        polarActive={polarActive}
+        onTogglePolar={() => setPolarActive(prev => !prev)}
+        showGrid={internalShowGrid ?? showGrid}
+        onToggleGrid={() => setInternalShowGrid(prev => !(prev ?? showGrid))}
+        activeTool={activeTool}
+        draftingPointsCount={draftingState.points?.length || 0}
+        onFinishDrafting={handleFinishWallChain}
+        onCancelDrafting={handleCancelDrafting}
+        onCloseRoom={handleCloseRoomLoop}
+      />
     </div>
   );
 }

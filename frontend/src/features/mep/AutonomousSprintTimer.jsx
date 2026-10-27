@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 14, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 15, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -237,48 +237,60 @@ export default function AutonomousSprintTimer({ currentCycle = 14, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 14: Solar PV &amp; BESS + Advanced Plumbing Canvas Suite
+                      Cycle 15 (Hour 1): Interactive 2D Wall Drafting &amp; OSNAP Engine
                     </span>
                     <span style={{ fontSize: '10px', color: '#34D399', fontWeight: 800 }}>LIVE</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
-                    IEEE 1547 Rooftop Solar PV, LiFePO4 BESS Storage, IPC WSFU/DFU Canvas HUD &amp; NBC Booster Pumps.
+                    Interactive rubber-band wall drawing, Ortho 0°/90° lock, magnetic OSNAP glyphs, polygon loop closure &amp; dynamic length/angle HUD.
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #38BDF8' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 13: 3D WebGL Spatial BIM Viewport &amp; ASHRAE Acoustics
+                      Cycle 16 (Hour 2): Smart Wall-Hosted Doors &amp; Windows Engine
                     </span>
-                    <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>✓ COMPLETED</span>
+                    <span style={{ fontSize: '10px', color: '#38BDF8', fontWeight: 700 }}>NEXT HOUR</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
-                    Unrestricted 360° rotation, interactive wall deletion, 3D MEP pipelines, and ASHRAE Ch. 8 noise analysis.
+                    Dynamic wall detection, swing preview, F/Space orientation flipping, auto-cutout &amp; lintel annotations.
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #64748B' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 12: 3D Multi-Discipline Clash Harmonizer
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8' }}>
+                      Cycle 17 (Hour 3): Interactive 2D Orthogonal Pipe Routing
                     </span>
-                    <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>✓ COMPLETED</span>
+                    <span style={{ fontSize: '10px', color: '#64748B' }}>PLANNED</span>
                   </div>
-                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
-                    ISO 19650-2 clash matrix &amp; autonomous vertical bypass detours.
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
+                    Continuous click-to-route piping, auto-elbows, slope markers &amp; sanitary fixture port snapping.
                   </div>
                 </div>
 
-                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #F59E0B' }}>
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #64748B' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 15: VRF Air-Conditioning &amp; Variable Refrigerant Flow Engine
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8' }}>
+                      Cycle 18 (Hour 4): Interactive HVAC Ductwork &amp; Diffuser Drops
                     </span>
-                    <span style={{ fontSize: '10px', color: '#F59E0B', fontWeight: 700 }}>NEXT HOUR</span>
+                    <span style={{ fontSize: '10px', color: '#64748B' }}>PLANNED</span>
                   </div>
-                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
-                    Simultaneous heating/cooling heat recovery, branch selector boxes, and refrigerant piping lift limits.
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
+                    Rectangular/round duct routing with automatic transitions &amp; ceiling diffuser drops.
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #64748B' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8' }}>
+                      Cycle 19-24 (Hours 5-24): Dimensions, Multi-Select &amp; BIM Suite
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#64748B' }}>24H ROADMAP</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
+                    Continuous aligned dimension strings, marquee multi-select, room area auto-centroid program &amp; commercial verification.
                   </div>
                 </div>
               </div>
