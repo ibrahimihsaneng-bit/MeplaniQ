@@ -17,6 +17,7 @@ import {
   calculateCircuitLoading,
   generateHomerunLeader
 } from './electricalRoutingEngine';
+import { calculateAlignedDimension } from './dimensioningEngine';
 
 /**
  * CadCursorOverlay.jsx
@@ -64,7 +65,11 @@ export default function CadCursorOverlay({
   wireGauge = '2.5',
   activeCircuitId = 'CKT-1',
   nearestDbPort = null,
-  selectedElectricalFixtureType = 'recessed_downlight'
+  selectedElectricalFixtureType = 'recessed_downlight',
+  // Dimension & Selection Props (Cycle 19)
+  marqueeBox = null,
+  dimensionDraft = null,
+  roomTagPreview = null
 }) {
   const glyphSize = 14 / zoom;
   const halfGlyph = glyphSize / 2;
@@ -983,6 +988,226 @@ export default function CadCursorOverlay({
               </>
             );
           })()}
+        </g>
+      )}
+
+      {/* 9. MARQUEE WINDOW & CROSSING SELECTION RECTANGLE */}
+      {marqueeBox && marqueeBox.width > 2 && marqueeBox.height > 2 && (
+        <g id="CAD_MARQUEE_SELECTION">
+          <rect
+            x={marqueeBox.minX}
+            y={marqueeBox.minY}
+            width={marqueeBox.width}
+            height={marqueeBox.height}
+            fill={marqueeBox.isCrossing ? 'rgba(16, 185, 129, 0.18)' : 'rgba(37, 99, 235, 0.18)'}
+            stroke={marqueeBox.isCrossing ? '#10B981' : '#2563EB'}
+            strokeWidth={1.5 / zoom}
+            strokeDasharray={marqueeBox.isCrossing ? `${6 / zoom} ${4 / zoom}` : 'none'}
+          />
+          {/* Badge showing Window vs Crossing */}
+          <g transform={`translate(${marqueeBox.maxX}, ${marqueeBox.maxY}) scale(${1 / zoom}, ${-1 / zoom})`}>
+            <rect
+              x="-115"
+              y="-26"
+              width="115"
+              height="22"
+              rx="4"
+              fill={marqueeBox.isCrossing ? '#065F46' : '#1E40AF'}
+              stroke={marqueeBox.isCrossing ? '#34D399' : '#60A5FA'}
+              strokeWidth="1"
+            />
+            <text x="-57" y="-12" textAnchor="middle" fill="#FFFFFF" fontSize="9.5" fontWeight="800">
+              {marqueeBox.isCrossing ? '⇱ Crossing Select' : '⇲ Window Select'}
+            </text>
+          </g>
+        </g>
+      )}
+
+      {/* 10. INTERACTIVE DIMENSION DRAFTING OVERLAY */}
+      {activeTool === 'dimension' && dimensionDraft && (
+        <g id="CAD_DIMENSION_DRAFT">
+          {/* Step 1: Waiting for first point - show crosshair guide */}
+          {dimensionDraft.step === 1 && (
+            <g transform={`translate(${cursorPt.x}, ${cursorPt.y})`}>
+              <circle r={6 / zoom} fill="none" stroke="#38BDF8" strokeWidth={1.5 / zoom} />
+              <g transform={`scale(${1 / zoom}, ${-1 / zoom})`}>
+                <rect x="15" y="-10" width="130" height="20" rx="4" fill="rgba(15, 23, 42, 0.9)" stroke="#38BDF8" strokeWidth="1" />
+                <text x="80" y="4" textAnchor="middle" fill="#38BDF8" fontSize="9" fontWeight="700">
+                  Click Point 1 for Dimension
+                </text>
+              </g>
+            </g>
+          )}
+
+          {/* Step 2: First point fixed, dragging to second point */}
+          {dimensionDraft.step === 2 && dimensionDraft.p1 && (
+            (() => {
+              const p1 = dimensionDraft.p1;
+              const p2 = osnapPt ? osnapPt.point : cursorPt;
+              const dist = Math.round(Math.hypot(p2.x - p1.x, p2.y - p1.y));
+              const midX = (p1.x + p2.x) / 2;
+              const midY = (p1.y + p2.y) / 2;
+
+              return (
+                <g>
+                  {/* Measurement reference line */}
+                  <line
+                    x1={p1.x}
+                    y1={p1.y}
+                    x2={p2.x}
+                    y2={p2.y}
+                    stroke="#38BDF8"
+                    strokeWidth={1.5 / zoom}
+                    strokeDasharray={`${6 / zoom} ${3 / zoom}`}
+                  />
+                  {/* Start point marker */}
+                  <circle cx={p1.x} cy={p1.y} r={4 / zoom} fill="#38BDF8" />
+                  {/* End point marker */}
+                  <circle cx={p2.x} cy={p2.y} r={4 / zoom} fill="#38BDF8" />
+
+                  {/* Midpoint Distance HUD */}
+                  <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                    <rect x="-55" y="-12" width="110" height="24" rx="5" fill="rgba(15, 23, 42, 0.95)" stroke="#38BDF8" strokeWidth="1.5" />
+                    <text x="0" y="4" textAnchor="middle" fill="#38BDF8" fontSize="10" fontWeight="800">
+                      📏 {dist.toLocaleString()} mm
+                    </text>
+                  </g>
+                </g>
+              );
+            })()
+          )}
+
+          {/* Step 3: Points 1 and 2 fixed, dragging offset position */}
+          {dimensionDraft.step === 3 && dimensionDraft.p1 && dimensionDraft.p2 && (
+            (() => {
+              const dimGeom = calculateAlignedDimension(
+                dimensionDraft.p1,
+                dimensionDraft.p2,
+                cursorPt,
+                { unit: dimensionDraft.unit || 'mm', tickStyle: 'tick' }
+              );
+              if (!dimGeom) return null;
+
+              return (
+                <g>
+                  {/* Witness Lines */}
+                  <line
+                    x1={dimGeom.ext1.x1}
+                    y1={dimGeom.ext1.y1}
+                    x2={dimGeom.ext1.x2}
+                    y2={dimGeom.ext1.y2}
+                    stroke="rgba(56, 189, 248, 0.7)"
+                    strokeWidth={1 / zoom}
+                    strokeDasharray={`${4 / zoom} ${2 / zoom}`}
+                  />
+                  <line
+                    x1={dimGeom.ext2.x1}
+                    y1={dimGeom.ext2.y1}
+                    x2={dimGeom.ext2.x2}
+                    y2={dimGeom.ext2.y2}
+                    stroke="rgba(56, 189, 248, 0.7)"
+                    strokeWidth={1 / zoom}
+                    strokeDasharray={`${4 / zoom} ${2 / zoom}`}
+                  />
+
+                  {/* Dimension Baseline */}
+                  <line
+                    x1={dimGeom.dim1.x}
+                    y1={dimGeom.dim1.y}
+                    x2={dimGeom.dim2.x}
+                    y2={dimGeom.dim2.y}
+                    stroke="#38BDF8"
+                    strokeWidth={2 / zoom}
+                  />
+
+                  {/* Architectural 45-degree Ticks */}
+                  <line
+                    x1={dimGeom.tick1.x1}
+                    y1={dimGeom.tick1.y1}
+                    x2={dimGeom.tick1.x2}
+                    y2={dimGeom.tick1.y2}
+                    stroke="#38BDF8"
+                    strokeWidth={2.5 / zoom}
+                  />
+                  <line
+                    x1={dimGeom.tick2.x1}
+                    y1={dimGeom.tick2.y1}
+                    x2={dimGeom.tick2.x2}
+                    y2={dimGeom.tick2.y2}
+                    stroke="#38BDF8"
+                    strokeWidth={2.5 / zoom}
+                  />
+
+                  {/* Dimension Text Label */}
+                  <g transform={`translate(${dimGeom.textPosition.x}, ${dimGeom.textPosition.y}) scale(${1 / zoom}, ${-1 / zoom}) rotate(${dimGeom.textAngle})`}>
+                    <rect
+                      x="-45"
+                      y="-11"
+                      width="90"
+                      height="22"
+                      rx="4"
+                      fill="rgba(15, 23, 42, 0.95)"
+                      stroke="#38BDF8"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x="0"
+                      y="4"
+                      textAnchor="middle"
+                      fill="#38BDF8"
+                      fontSize="9.5"
+                      fontWeight="800"
+                    >
+                      {dimGeom.label}
+                    </text>
+                  </g>
+                </g>
+              );
+            })()
+          )}
+        </g>
+      )}
+
+      {/* 11. ROOM TAG HOVER & CENTROID PREVIEW */}
+      {activeTool === 'room_tag' && roomTagPreview && (
+        <g id="CAD_ROOM_TAG_PREVIEW">
+          {/* Highlight room polygon boundary */}
+          {roomTagPreview.polygon && (
+            <polygon
+              points={roomTagPreview.polygon.map(p => `${p.x},${p.y}`).join(' ')}
+              fill="rgba(56, 189, 248, 0.08)"
+              stroke="#38BDF8"
+              strokeWidth={2 / zoom}
+              strokeDasharray={`${8 / zoom} ${4 / zoom}`}
+            />
+          )}
+
+          {/* Centroid Reticle */}
+          <g transform={`translate(${roomTagPreview.x}, ${roomTagPreview.y})`}>
+            <circle r={8 / zoom} fill="none" stroke="#38BDF8" strokeWidth={2 / zoom} />
+            <line x1={-12 / zoom} y1={0} x2={12 / zoom} y2={0} stroke="#38BDF8" strokeWidth={1.5 / zoom} />
+            <line x1={0} y1={-12 / zoom} x2={0} y2={12 / zoom} stroke="#38BDF8" strokeWidth={1.5 / zoom} />
+
+            {/* Room Tag Architectural Badge */}
+            <g transform={`scale(${1 / zoom}, ${-1 / zoom})`}>
+              <rect
+                x="-80"
+                y="-45"
+                width="160"
+                height="40"
+                rx="6"
+                fill="rgba(15, 23, 42, 0.95)"
+                stroke="#38BDF8"
+                strokeWidth="1.5"
+              />
+              <text x="0" y="-28" textAnchor="middle" fill="#F8FAFC" fontSize="10" fontWeight="800">
+                {roomTagPreview.roomName || 'ROOM'}
+              </text>
+              <text x="0" y="-12" textAnchor="middle" fill="#38BDF8" fontSize="9" fontWeight="700">
+                {roomTagPreview.areaM2} m² ({roomTagPreview.areaSqFt} sq ft)
+              </text>
+            </g>
+          </g>
         </g>
       )}
     </g>

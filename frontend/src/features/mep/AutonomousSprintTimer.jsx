@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 18, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 19, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -237,9 +237,21 @@ export default function AutonomousSprintTimer({ currentCycle = 18, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 18 (Hour 4): Electrical Homeruns, Multi-Drop Conduit Routing &amp; Circuit Distribution
+                      Cycle 19 (Hour 5): Continuous Aligned Dimension Strings, Marquee Multi-Select &amp; Room Tagging
                     </span>
                     <span style={{ fontSize: '10px', color: '#34D399', fontWeight: 800 }}>LIVE</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                    Continuous chained dimension strings (ASME/ISO), window (blue) and crossing (green) multi-selection marquee, and Shoelace polygon centroid &amp; space area tags with ASHRAE 62.1 airflow requirements.
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
+                      Cycle 18 (Hour 4): Electrical Homeruns, Multi-Drop Conduit Routing &amp; Circuit Distribution
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>✓ COMPLETED</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
                     Multi-drop branch conduit routing (Slab, Surface, FMC), terminal junction snaps, angled homerun arrows with 3-conductor tick marks &amp; NEC voltage drop calculations.
@@ -285,19 +297,19 @@ export default function AutonomousSprintTimer({ currentCycle = 18, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #38BDF8' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 19 (Hour 5): Continuous Aligned Dimension Strings &amp; Marquee Multi-Select
+                      Cycle 20 (Hour 6): Multi-Discipline 2D MEP Clash Detection &amp; Penetration Sleeves
                     </span>
                     <span style={{ fontSize: '10px', color: '#38BDF8', fontWeight: 700 }}>NEXT HOUR</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
-                    Auto-aligned dimension chains along exterior and interior walls, marquee lasso multi-select, and mass batch geometric transform tools.
+                    Real-time geometric collision detection between plumbing pipes, HVAC ductwork, and structural walls, with automated penetration sleeve sizing &amp; elevation offset bypasses.
                   </div>
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #64748B' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8' }}>
-                      Cycle 20-24 (Hours 6-24): Multi-Layer MEP Coordination &amp; Full BIM Suite
+                      Cycle 21-24 (Hours 7-24): Comprehensive BIM Documentation &amp; Production Export
                     </span>
                     <span style={{ fontSize: '10px', color: '#64748B' }}>24H ROADMAP</span>
                   </div>

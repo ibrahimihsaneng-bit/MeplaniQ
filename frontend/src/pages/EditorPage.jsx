@@ -259,6 +259,8 @@ export default function EditorPage() {
         setActiveTool('electrical');
         setActiveTab('electrical');
         setIsScheduleCollapsed(false);
+      } else if (e.key === 'r' || e.key === 'R') {
+        setActiveTool('room_tag');
       } else if (e.key === 'g' || e.key === 'G') {
         setShowGrid(prev => !prev);
       } else if ((e.key === 'm' || e.key === 'M') || (e.key === 'Shift' && !e.ctrlKey && !e.altKey)) {
@@ -1577,6 +1579,100 @@ export default function EditorPage() {
     } else if (itemType === "AutoRoutePlumbing") {
       await handleAutoPopulateMep({ include_plumbing: true, include_electrical: false, include_hvac: false, include_furniture: false });
       return;
+    } else if (itemType === "AddDimension") {
+      const newDim = updates;
+      setSolveData(prev => prev ? {
+        ...prev,
+        dimensions: [...(prev.dimensions || []).filter(d => d.id !== newDim.id), newDim]
+      } : prev);
+      setIsDirty(true);
+      return;
+    } else if (itemType === "DeleteDimension") {
+      setSolveData(prev => prev ? {
+        ...prev,
+        dimensions: (prev.dimensions || []).filter(d => d.id !== itemId)
+      } : prev);
+      setIsDirty(true);
+      return;
+    } else if (itemType === "AddRoomTag") {
+      const newTag = updates;
+      setSolveData(prev => prev ? {
+        ...prev,
+        room_tags: [...(prev.room_tags || []).filter(t => t.id !== newTag.id && t.roomName !== newTag.roomName), newTag]
+      } : prev);
+      setIsDirty(true);
+      return;
+    } else if (itemType === "DeleteRoomTag") {
+      setSolveData(prev => prev ? {
+        ...prev,
+        room_tags: (prev.room_tags || []).filter(t => t.id !== itemId)
+      } : prev);
+      setIsDirty(true);
+      return;
+    } else if (itemType === "BatchDelete") {
+      const { items } = updates || {};
+      if (Array.isArray(items) && items.length > 0) {
+        const idsByType = {};
+        items.forEach(it => {
+          if (!idsByType[it.type]) idsByType[it.type] = new Set();
+          idsByType[it.type].add(it.id);
+        });
+
+        if (idsByType.Furniture) {
+          newFurniture = newFurniture.filter(f => !idsByType.Furniture.has(f.id));
+          setEditableFurniture(newFurniture);
+        }
+        if (idsByType.PlumbingFixture) {
+          newPlumbingFixtures = newPlumbingFixtures.filter(f => !idsByType.PlumbingFixture.has(f.id));
+          setEditablePlumbingFixtures(newPlumbingFixtures);
+        }
+        if (idsByType.PlumbingPipe) {
+          newPlumbingPipes = newPlumbingPipes.filter(p => !idsByType.PlumbingPipe.has(p.id));
+          setEditablePlumbingPipes(newPlumbingPipes);
+        }
+        if (idsByType.ElectricalComponent) {
+          newElectricalComponents = newElectricalComponents.filter(c => !idsByType.ElectricalComponent.has(c.id));
+          setEditableElectricalComponents(newElectricalComponents);
+        }
+        if (idsByType.ElectricalRoute) {
+          newElectricalRoutes = newElectricalRoutes.filter(r => !idsByType.ElectricalRoute.has(r.id));
+          setEditableElectricalRoutes(newElectricalRoutes);
+        }
+        if (idsByType.HVAC) {
+          newHvac = newHvac.filter(h => !idsByType.HVAC.has(h.id));
+          setEditableHvac(newHvac);
+        }
+        if (idsByType.Door) {
+          newDoors = newDoors.filter(d => !idsByType.Door.has(d.id));
+          setEditableDoors(newDoors);
+        }
+        if (idsByType.Window) {
+          newWindows = newWindows.filter(w => !idsByType.Window.has(w.id));
+          setEditableWindows(newWindows);
+        }
+
+        setSolveData(prev => {
+          if (!prev) return prev;
+          let nextState = { ...prev };
+          if (idsByType.PlumbingFixture) nextState.plumbing_fixtures = (nextState.plumbing_fixtures || []).filter(f => !idsByType.PlumbingFixture.has(f.id));
+          if (idsByType.PlumbingPipe) nextState.plumbing_pipes = (nextState.plumbing_pipes || []).filter(p => !idsByType.PlumbingPipe.has(p.id));
+          if (idsByType.HvacDuct) nextState.hvac_ducts = (nextState.hvac_ducts || []).filter(d => !idsByType.HvacDuct.has(d.id));
+          if (idsByType.HvacDiffuser) nextState.hvac_diffusers = (nextState.hvac_diffusers || []).filter(d => !idsByType.HvacDiffuser.has(d.id));
+          if (idsByType.HVAC) nextState.hvac_equipment = (nextState.hvac_equipment || []).filter(e => !idsByType.HVAC.has(e.id));
+          if (idsByType.ElectricalComponent) nextState.electrical_components = (nextState.electrical_components || []).filter(c => !idsByType.ElectricalComponent.has(c.id));
+          if (idsByType.ElectricalRoute) nextState.electrical_routes = (nextState.electrical_routes || []).filter(r => !idsByType.ElectricalRoute.has(r.id));
+          if (idsByType.Furniture) nextState.furniture = (nextState.furniture || []).filter(f => !idsByType.Furniture.has(f.id));
+          if (idsByType.Door) nextState.doors = (nextState.doors || []).filter(d => !idsByType.Door.has(d.id));
+          if (idsByType.Window) nextState.windows = (nextState.windows || []).filter(w => !idsByType.Window.has(w.id));
+          if (idsByType.Dimension) nextState.dimensions = (nextState.dimensions || []).filter(d => !idsByType.Dimension.has(d.id));
+          if (idsByType.RoomTag) nextState.room_tags = (nextState.room_tags || []).filter(t => !idsByType.RoomTag.has(t.id));
+          return nextState;
+        });
+
+        setIsDirty(true);
+        showToast(`Batch deleted ${items.length} selected items`, "info");
+      }
+      return;
     }
 
     const updatePayload = {
@@ -2112,7 +2208,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={18} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={19} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2855,6 +2951,31 @@ export default function EditorPage() {
               >
                 <span>⚡</span>
                 <span className="tool-shortcut-badge">E</span>
+              </button>
+
+              {/* Dimension Tool */}
+              <button
+                type="button"
+                className={`tool-palette-btn ${activeTool === 'dimension' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTool('dimension');
+                }}
+                title="Aligned & Continuous Dimensions"
+              >
+                <span>📐</span>
+              </button>
+
+              {/* Room Tag Tool */}
+              <button
+                type="button"
+                className={`tool-palette-btn ${activeTool === 'room_tag' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTool('room_tag');
+                }}
+                title="Room Space Tagging & Centroid Calculator (R)"
+              >
+                <span>🏷️</span>
+                <span className="tool-shortcut-badge">R</span>
               </button>
 
               <div className="tool-palette-divider" />

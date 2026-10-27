@@ -2,6 +2,7 @@ import React from 'react';
 import { PLUMBING_SYSTEMS } from './pipeRoutingEngine';
 import { HVAC_DUCT_SYSTEMS, HVAC_DIFFUSER_TYPES, calculateDuctVelocity } from './ductRoutingEngine';
 import { CONDUIT_TYPES, WIRE_GAUGES } from './electricalRoutingEngine';
+import { ROOM_PROFILES } from './roomTagEngine';
 
 /**
  * CadStatusBar.jsx
@@ -57,7 +58,21 @@ export default function CadStatusBar({
   onChangeActiveCircuitId,
   electricalCircuits = [],
   selectedElectricalFixtureType = 'recessed_downlight',
-  onChangeElectricalFixtureType
+  onChangeElectricalFixtureType,
+  // Multi-Selection Props (Cycle 19)
+  multiSelection = [],
+  onBatchDelete,
+  onClearSelection,
+  // Dimension Tool Props (Cycle 19)
+  dimensionMode = 'aligned',
+  onChangeDimensionMode,
+  dimensionUnit = 'mm',
+  onChangeDimensionUnit,
+  onAutoOuterWallDimensions,
+  // Room Tagging Props (Cycle 19)
+  selectedRoomType = 'LIVING',
+  onChangeRoomType,
+  onAutoTagRooms
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -229,13 +244,189 @@ export default function CadStatusBar({
           )}
 
           {activeTool === 'select' && (
+            multiSelection && multiSelection.length > 0 ? (
+              <>
+                <span style={{ color: '#38BDF8', fontWeight: 700 }}>✨ MULTI-SELECTION:</span>
+                <span>{multiSelection.length} entities selected • [Del] Delete All • [Esc] Clear Selection</span>
+              </>
+            ) : (
+              <>
+                <span style={{ color: '#64748B' }}>💡 Tip:</span>
+                <span>Drag left-to-right for Window Select (Blue) • Drag right-to-left for Crossing Select (Green).</span>
+              </>
+            )
+          )}
+
+          {activeTool === 'dimension' && (
             <>
-              <span style={{ color: '#64748B' }}>💡 Tip:</span>
-              <span>Select elements to inspect or drag to modify. Switch tool on left palette.</span>
+              <span style={{ color: '#38BDF8', fontWeight: 700 }}>📐 DIMENSION:</span>
+              <span>Click Point 1 ➔ Point 2 ➔ Drag offset to place • Continuous chain dimensioning supported.</span>
+            </>
+          )}
+
+          {activeTool === 'room_tag' && (
+            <>
+              <span style={{ color: '#10B981', fontWeight: 700 }}>🏷️ ROOM TAG:</span>
+              <span>Click inside room polygon to calculate exact centroid &amp; floor area (m² / sq ft).</span>
             </>
           )}
         </div>
       </div>
+
+      {/* CENTER: Multi-Selection Floating Action Bar */}
+      {multiSelection && multiSelection.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#1E293B', padding: '4px 12px', borderRadius: '6px', border: '1px solid #38BDF8', boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}>
+          <span style={{ color: '#38BDF8', fontSize: '11px', fontWeight: 800 }}>
+            ✨ {multiSelection.length} ITEMS SELECTED
+          </span>
+          <button
+            type="button"
+            onClick={onBatchDelete}
+            style={{
+              padding: '3px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: '#DC2626',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+            title="Delete all selected items (Delete/Backspace)"
+          >
+            🗑️ Delete Selected
+          </button>
+          <button
+            type="button"
+            onClick={onClearSelection}
+            style={{
+              padding: '3px 8px',
+              fontSize: '11px',
+              backgroundColor: '#334155',
+              color: '#94A3B8',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+            title="Clear selection (Escape)"
+          >
+            ✕ Clear
+          </button>
+        </div>
+      )}
+
+      {/* CENTER: Dimension Tool Mode & Auto-Dimensioner */}
+      {activeTool === 'dimension' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(30, 41, 59, 0.9)', padding: '3px 10px', borderRadius: '6px', border: '1px solid #38BDF8' }}>
+          <span style={{ color: '#38BDF8', fontSize: '10px', fontWeight: 800 }}>DIMENSION:</span>
+          <div style={{ display: 'flex', gap: '2px', backgroundColor: '#0F172A', padding: '2px', borderRadius: '4px' }}>
+            {[
+              { id: 'aligned', label: '📐 Aligned' },
+              { id: 'linear', label: '📏 Linear' },
+              { id: 'chain', label: '🔗 Chain' }
+            ].map(m => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onChangeDimensionMode?.(m.id)}
+                style={{
+                  padding: '3px 8px',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  borderRadius: '3px',
+                  backgroundColor: dimensionMode === m.id ? '#0284C7' : 'transparent',
+                  color: dimensionMode === m.id ? '#FFFFFF' : '#94A3B8',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: '2px', backgroundColor: '#0F172A', padding: '2px', borderRadius: '4px' }}>
+            {['mm', 'm', 'ft_in'].map(u => (
+              <button
+                key={u}
+                type="button"
+                onClick={() => onChangeDimensionUnit?.(u)}
+                style={{
+                  padding: '3px 6px',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  borderRadius: '3px',
+                  backgroundColor: dimensionUnit === u ? '#38BDF8' : 'transparent',
+                  color: dimensionUnit === u ? '#0F172A' : '#94A3B8',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {u.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={onAutoOuterWallDimensions}
+            style={{
+              padding: '4px 10px',
+              fontSize: '10px',
+              fontWeight: 800,
+              backgroundColor: '#0284C7',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+            title="Auto-generate dimension strings for all exterior room walls"
+          >
+            ⚡ Auto Wall Dims
+          </button>
+        </div>
+      )}
+
+      {/* CENTER: Room Tagging Profiles & Auto-Tagger */}
+      {activeTool === 'room_tag' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(30, 41, 59, 0.9)', padding: '3px 10px', borderRadius: '6px', border: '1px solid #10B981' }}>
+          <span style={{ color: '#10B981', fontSize: '10px', fontWeight: 800 }}>ROOM TYPE:</span>
+          <select
+            value={selectedRoomType}
+            onChange={(e) => onChangeRoomType?.(e.target.value)}
+            style={{
+              backgroundColor: '#0F172A',
+              color: '#F8FAFC',
+              fontSize: '11px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              border: '1px solid #334155'
+            }}
+          >
+            {Object.values(ROOM_PROFILES).map(p => (
+              <option key={p.key} value={p.key}>{p.name} ({p.codePrefix})</option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            onClick={onAutoTagRooms}
+            style={{
+              padding: '4px 10px',
+              fontSize: '10px',
+              fontWeight: 800,
+              backgroundColor: '#059669',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+            title="Automatically compute centroids and tag all room spaces"
+          >
+            ⚡ Auto-Tag All Rooms
+          </button>
+        </div>
+      )}
 
       {/* CENTER: Active Plumbing System & Diameter Quick Selector when activeTool === 'plumbing' */}
       {activeTool === 'plumbing' && (

@@ -43,6 +43,21 @@ import {
   calculateCircuitLoading,
   generateHomerunLeader
 } from './features/cad2d/electricalRoutingEngine';
+import {
+  calculateAlignedDimension,
+  chainDimensionContinuation,
+  generateExteriorWallDimensions
+} from './features/cad2d/dimensioningEngine';
+import {
+  createMarqueeBox,
+  queryMarqueeSelection
+} from './features/cad2d/marqueeSelectionEngine';
+import {
+  computePolygonCentroid,
+  isPointInsidePolygon,
+  generateRoomTag,
+  ROOM_PROFILES
+} from './features/cad2d/roomTagEngine';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1311,6 +1326,73 @@ export default function Canvas({
     setDraftingState({ active: false, tool: null, points: [], isNearStart: false });
   }, []);
 
+  // ─── Cycle 19: Marquee Multi-Select State ─────────────────────────────────
+  const [multiSelection, setMultiSelection] = useState([]);
+  const [marqueeStart, setMarqueeStart] = useState(null);
+  const [marqueeCurrent, setMarqueeCurrent] = useState(null);
+
+  const marqueeBox = useMemo(() => {
+    if (!marqueeStart || !marqueeCurrent) return null;
+    return createMarqueeBox(marqueeStart, marqueeCurrent);
+  }, [marqueeStart, marqueeCurrent]);
+
+  const handleBatchDelete = useCallback(() => {
+    if (!multiSelection || multiSelection.length === 0) return;
+    onLiveItemUpdate?.('BatchDelete', null, { items: multiSelection });
+    setMultiSelection([]);
+    setInternalSelectedItem(null);
+  }, [multiSelection, onLiveItemUpdate]);
+
+  const handleClearSelection = useCallback(() => {
+    setMultiSelection([]);
+    setInternalSelectedItem(null);
+  }, []);
+
+  // ─── Cycle 19: Dimensioning Engine State ─────────────────────────────────
+  const [dimensionMode, setDimensionMode] = useState('aligned'); // 'aligned' | 'linear' | 'chain'
+  const [dimensionUnit, setDimensionUnit] = useState('mm'); // 'mm' | 'm' | 'ft_in'
+  const [dimensionDraft, setDimensionDraft] = useState({
+    step: 1, // 1: waiting for p1, 2: waiting for p2, 3: waiting for offset
+    p1: null,
+    p2: null,
+    prevDim: null,
+    unit: 'mm'
+  });
+
+  const handleAutoOuterWallDimensions = useCallback(() => {
+    const rooms = solveData?.rooms || [];
+    if (rooms.length === 0) return;
+    rooms.forEach(r => {
+      const pts = (r.points || []).map(p => ({ x: p[0], y: p[1] }));
+      if (pts.length >= 3) {
+        const extDims = generateExteriorWallDimensions(pts, 600);
+        extDims.forEach(dim => {
+          onLiveItemUpdate?.('AddDimension', null, dim);
+        });
+      }
+    });
+  }, [solveData?.rooms, onLiveItemUpdate]);
+
+  // ─── Cycle 19: Room Tagging Engine State ──────────────────────────────────
+  const [selectedRoomType, setSelectedRoomType] = useState('LIVING');
+  const [roomTagHover, setRoomTagHover] = useState(null);
+
+  const handleAutoTagRooms = useCallback(() => {
+    const rooms = solveData?.rooms || [];
+    if (rooms.length === 0) return;
+    rooms.forEach((r, idx) => {
+      const pts = (r.points || []).map(p => ({ x: p[0], y: p[1] }));
+      if (pts.length >= 3) {
+        const tag = generateRoomTag(pts, {
+          roomType: idx === 0 ? 'LIVING' : (idx === 1 ? 'KITCHEN' : (idx === 2 ? 'BEDROOM' : 'BATHROOM')),
+          customName: r.name,
+          roomNumber: `10${idx + 1}`
+        });
+        onLiveItemUpdate?.('AddRoomTag', null, tag);
+      }
+    });
+  }, [solveData?.rooms, onLiveItemUpdate]);
+
   useEffect(() => {
     if (activeTool !== 'wall' && activeTool !== 'plumbing' && draftingState.active) {
       setDraftingState({ active: false, tool: null, points: [], isNearStart: false, startPort: null });
@@ -1392,7 +1474,11 @@ export default function Canvas({
           return true;
         });
       } else if (e.key === 'Escape') {
-        if (draftingState.active) {
+        if (multiSelection && multiSelection.length > 0) {
+          setMultiSelection([]);
+        } else if (dimensionDraft.step > 1) {
+          setDimensionDraft({ step: 1, p1: null, p2: null, prevDim: null, unit: dimensionUnit });
+        } else if (draftingState.active) {
           handleCancelDrafting();
         } else if (tapeMeasureActive || tapeStart) {
           setTapeMeasureActive(false);
@@ -1400,10 +1486,13 @@ export default function Canvas({
           setTapeEnd(null);
           setTapeHover(null);
         } else if (selectedItem) {
-          setSelectedItem(null);
+          setInternalSelectedItem(null);
         }
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedItem && selectedItem.item) {
+        if (multiSelection && multiSelection.length > 0) {
+          e.preventDefault();
+          handleBatchDelete();
+        } else if (selectedItem && selectedItem.item) {
           e.preventDefault();
           const id = selectedItem.item.id;
           const type = selectedItem.type;
@@ -1416,7 +1505,9 @@ export default function Canvas({
           else if (type === "ElectricalComponent" || type === "Electrical") onLiveItemUpdate?.("DeleteElectricalComponent", id);
           else if (type === "HVAC") onLiveItemUpdate?.("DeleteHVAC", id);
           else if (type === "Door" || type === "Window") onLiveItemUpdate?.("DeleteOpening", id);
-          setSelectedItem(null);
+          else if (type === "Dimension") onLiveItemUpdate?.("DeleteDimension", id);
+          else if (type === "RoomTag") onLiveItemUpdate?.("DeleteRoomTag", id);
+          setInternalSelectedItem(null);
         }
       }
     };
@@ -1508,6 +1599,32 @@ export default function Canvas({
       }
     }
     setCadCursorPt(effectivePt);
+
+    // Update marquee drag selection
+    if (marqueeStart) {
+      setMarqueeCurrent(effectivePt);
+    }
+
+    // Room tag hover detection when activeTool === 'room_tag'
+    if (activeTool === 'room_tag') {
+      const rooms = solveData?.rooms || [];
+      let foundRoom = null;
+      for (const r of rooms) {
+        const poly = (r.points || []).map(p => ({ x: p[0], y: p[1] }));
+        if (poly.length >= 3 && isPointInsidePolygon(effectivePt, poly)) {
+          const c = computePolygonCentroid(poly);
+          foundRoom = {
+            ...c,
+            roomName: r.name,
+            polygon: poly
+          };
+          break;
+        }
+      }
+      setRoomTagHover(foundRoom);
+    } else if (roomTagHover) {
+      setRoomTagHover(null);
+    }
 
     // Check loop closure if drafting walls
     if (draftingState.active && draftingState.points?.length >= 3) {
@@ -1623,6 +1740,75 @@ export default function Canvas({
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
       setIsPanning(true);
       setPanStart({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
+    // Interactive 2D Dimension Drafting Tool
+    if (activeTool === 'dimension' && e.button === 0) {
+      const targetPt = osnapPt ? osnapPt.point : cadCursorPt;
+
+      if (!dimensionDraft.step || dimensionDraft.step === 1) {
+        setDimensionDraft({
+          step: 2,
+          p1: targetPt,
+          p2: null,
+          unit: dimensionUnit
+        });
+      } else if (dimensionDraft.step === 2) {
+        setDimensionDraft(prev => ({
+          ...prev,
+          step: 3,
+          p2: targetPt
+        }));
+      } else if (dimensionDraft.step === 3) {
+        const dimGeom = calculateAlignedDimension(
+          dimensionDraft.p1,
+          dimensionDraft.p2,
+          targetPt,
+          { unit: dimensionUnit, tickStyle: 'tick' }
+        );
+        if (dimGeom) {
+          onLiveItemUpdate?.('AddDimension', null, dimGeom);
+        }
+
+        if (dimensionMode === 'chain') {
+          setDimensionDraft({
+            step: 2,
+            p1: dimensionDraft.p2,
+            p2: null,
+            prevDim: dimGeom,
+            unit: dimensionUnit
+          });
+        } else {
+          setDimensionDraft({
+            step: 1,
+            p1: null,
+            p2: null,
+            prevDim: null,
+            unit: dimensionUnit
+          });
+        }
+      }
+      return;
+    }
+
+    // Interactive 2D Room Tagging Tool
+    if (activeTool === 'room_tag' && e.button === 0) {
+      const clickPt = cadCursorPt;
+      const rooms = solveData?.rooms || [];
+      for (let i = 0; i < rooms.length; i++) {
+        const r = rooms[i];
+        const poly = (r.points || []).map(p => ({ x: p[0], y: p[1] }));
+        if (poly.length >= 3 && isPointInsidePolygon(clickPt, poly)) {
+          const newTag = generateRoomTag(poly, {
+            roomType: selectedRoomType,
+            customName: r.name,
+            roomNumber: `10${i + 1}`
+          });
+          onLiveItemUpdate?.('AddRoomTag', null, newTag);
+          break;
+        }
+      }
       return;
     }
 
@@ -1882,6 +2068,12 @@ export default function Canvas({
       return;
     }
 
+    if (activeTool === 'select' && e.button === 0) {
+      setMarqueeStart(cadCursorPt);
+      setMarqueeCurrent(cadCursorPt);
+      return;
+    }
+
     if (e.button === 0 || e.button === 1) {
       setIsPanning(true);
       setPanStart({ x: e.clientX, y: e.clientY });
@@ -1890,6 +2082,25 @@ export default function Canvas({
 
   const handleMouseUp = (e) => {
     setIsPanning(false);
+
+    // Finalize Marquee Selection
+    if (marqueeStart && marqueeCurrent) {
+      const box = createMarqueeBox(marqueeStart, marqueeCurrent);
+      if (box.width > 5 || box.height > 5) {
+        const matches = queryMarqueeSelection(box, solveData);
+        setMultiSelection(matches);
+        if (matches.length === 1) {
+          setInternalSelectedItem({ type: matches[0].type, item: matches[0].item });
+        } else if (matches.length > 1) {
+          setInternalSelectedItem(null);
+        }
+      } else {
+        setMultiSelection([]);
+        setInternalSelectedItem(null);
+      }
+      setMarqueeStart(null);
+      setMarqueeCurrent(null);
+    }
 
     if (dragState && onLiveItemUpdate) {
       if (dragState.type === "RoomResize") {
@@ -3290,24 +3501,123 @@ export default function Canvas({
               id="LAYER_DIMENSIONS"
               style={{
                 opacity: archVisualState.dimmed ? 0.15 : 1.0,
-                pointerEvents: archVisualState.interactive ? 'auto' : 'none',
+                pointerEvents: 'auto',
                 transition: 'opacity 0.2s ease'
               }}
             >
-              {solveData?.dimensions?.map((dim) => (
-                <g key={dim.id} className="cad-dimension-group">
-                  <line x1={dim.dim_x1} y1={dim.dim_y1} x2={dim.dim_x2} y2={dim.dim_y2} stroke="#38BDF8" strokeWidth={1.5 / zoom} />
-                  <line x1={dim.ext1_x1} y1={dim.ext1_y1} x2={dim.ext1_x2} y2={dim.ext1_y2} stroke="rgba(56, 189, 248, 0.6)" strokeWidth={1 / zoom} strokeDasharray={`${4 / zoom} ${2 / zoom}`} />
-                  <line x1={dim.ext2_x1} y1={dim.ext2_y1} x2={dim.ext2_x2} y2={dim.ext2_y2} stroke="rgba(56, 189, 248, 0.6)" strokeWidth={1 / zoom} strokeDasharray={`${4 / zoom} ${2 / zoom}`} />
-                  <line x1={dim.tick1_x1} y1={dim.tick1_y1} x2={dim.tick1_x2} y2={dim.tick1_y2} stroke="#38BDF8" strokeWidth={2 / zoom} />
-                  <line x1={dim.tick2_x1} y1={dim.tick2_y1} x2={dim.tick2_x2} y2={dim.tick2_y2} stroke="#38BDF8" strokeWidth={2 / zoom} />
-                  <g transform={`translate(${dim.label_x}, ${dim.label_y}) scale(${1 / zoom}, ${-1 / zoom})`} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    <text textAnchor="middle" alignmentBaseline="middle" fill="#38BDF8" fontSize="9.5" fontWeight="600" style={{ textShadow: '0px 1px 4px rgba(15, 23, 42, 0.95)' }}>
-                      {dim.label}
+              {solveData?.dimensions?.map((dim) => {
+                const isSelected = selectedItem?.item?.id === dim.id && selectedItem?.type === 'Dimension';
+                const strokeColor = isSelected ? '#F59E0B' : '#38BDF8';
+                const strokeWidthVal = isSelected ? 2.5 / zoom : 1.5 / zoom;
+
+                return (
+                  <g
+                    key={dim.id}
+                    className="cad-dimension-group"
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInternalSelectedItem({ type: 'Dimension', item: dim });
+                    }}
+                  >
+                    <line x1={dim.dim_x1} y1={dim.dim_y1} x2={dim.dim_x2} y2={dim.dim_y2} stroke={strokeColor} strokeWidth={strokeWidthVal} />
+                    <line x1={dim.ext1_x1} y1={dim.ext1_y1} x2={dim.ext1_x2} y2={dim.ext1_y2} stroke={isSelected ? 'rgba(245, 158, 11, 0.8)' : 'rgba(56, 189, 248, 0.6)'} strokeWidth={1 / zoom} strokeDasharray={`${4 / zoom} ${2 / zoom}`} />
+                    <line x1={dim.ext2_x1} y1={dim.ext2_y1} x2={dim.ext2_x2} y2={dim.ext2_y2} stroke={isSelected ? 'rgba(245, 158, 11, 0.8)' : 'rgba(56, 189, 248, 0.6)'} strokeWidth={1 / zoom} strokeDasharray={`${4 / zoom} ${2 / zoom}`} />
+                    <line x1={dim.tick1_x1} y1={dim.tick1_y1} x2={dim.tick1_x2} y2={dim.tick1_y2} stroke={strokeColor} strokeWidth={2.5 / zoom} />
+                    <line x1={dim.tick2_x1} y1={dim.tick2_y1} x2={dim.tick2_x2} y2={dim.tick2_y2} stroke={strokeColor} strokeWidth={2.5 / zoom} />
+                    <g transform={`translate(${dim.label_x}, ${dim.label_y}) scale(${1 / zoom}, ${-1 / zoom})`} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                      <rect
+                        x="-40"
+                        y="-10"
+                        width="80"
+                        height="20"
+                        rx="4"
+                        fill="rgba(15, 23, 42, 0.9)"
+                        stroke={strokeColor}
+                        strokeWidth="1"
+                      />
+                      <text textAnchor="middle" alignmentBaseline="middle" fill={strokeColor} fontSize="9" fontWeight="700">
+                        {dim.label}
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
+            </g>
+          )}
+
+          {/* LAYER_ROOM_TAGS */}
+          <g id="LAYER_ROOM_TAGS" style={{ pointerEvents: 'auto' }}>
+            {solveData?.room_tags?.map(tag => {
+              const isSelected = selectedItem?.item?.id === tag.id && selectedItem?.type === 'RoomTag';
+              return (
+                <g
+                  key={tag.id}
+                  transform={`translate(${tag.x}, ${tag.y})`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setInternalSelectedItem({ type: 'RoomTag', item: tag });
+                  }}
+                >
+                  <g transform={`scale(${1 / zoom}, ${-1 / zoom})`}>
+                    <rect
+                      x="-75"
+                      y="-28"
+                      width="150"
+                      height="52"
+                      rx="6"
+                      fill="rgba(15, 23, 42, 0.94)"
+                      stroke={isSelected ? '#F59E0B' : (tag.color || '#38BDF8')}
+                      strokeWidth={isSelected ? '2.5' : '1.5'}
+                      filter="drop-shadow(0px 3px 6px rgba(0,0,0,0.5))"
+                    />
+                    <rect
+                      x="-70"
+                      y="-24"
+                      width="38"
+                      height="13"
+                      rx="3"
+                      fill={tag.color || '#38BDF8'}
+                    />
+                    <text x="-51" y="-14" textAnchor="middle" fill="#0F172A" fontSize="8" fontWeight="900">
+                      {tag.roomNumber || '101'}
+                    </text>
+                    <text x="-25" y="-13" textAnchor="start" fill="#F8FAFC" fontSize="9" fontWeight="800">
+                      {tag.roomName || 'ROOM'}
+                    </text>
+                    <line x1="-70" y1="-6" x2="70" y2="-6" stroke="#334155" strokeWidth="1" />
+                    <text x="0" y="8" textAnchor="middle" fill="#38BDF8" fontSize="8.5" fontWeight="700">
+                      {tag.areaM2} m² • {tag.perimeterM || ((tag.perimeterMm || 0) / 1000).toFixed(1)} m
+                    </text>
+                    <text x="0" y="19" textAnchor="middle" fill="#94A3B8" fontSize="7.5" fontWeight="600">
+                      H: {tag.heightMm || 2800} mm • {tag.reqAirflowCfm || 100} CFM
                     </text>
                   </g>
                 </g>
-              ))}
+              );
+            })}
+          </g>
+
+          {/* MULTI-SELECTION HIGHLIGHT HALOS */}
+          {multiSelection.length > 0 && (
+            <g id="CAD_MULTI_SELECTION_HALOS" style={{ pointerEvents: 'none' }}>
+              {multiSelection.map(sel => {
+                if (!sel.bounds) return null;
+                return (
+                  <rect
+                    key={`sel-${sel.type}-${sel.id}`}
+                    x={sel.bounds.minX - 20 / zoom}
+                    y={sel.bounds.minY - 20 / zoom}
+                    width={(sel.bounds.maxX - sel.bounds.minX) + 40 / zoom}
+                    height={(sel.bounds.maxY - sel.bounds.minY) + 40 / zoom}
+                    fill="none"
+                    stroke="#38BDF8"
+                    strokeWidth={1.5 / zoom}
+                    strokeDasharray={`${6 / zoom} ${3 / zoom}`}
+                  />
+                );
+              })}
             </g>
           )}
 
@@ -4454,6 +4764,9 @@ export default function Canvas({
             activeCircuitId={activeCircuitId}
             nearestDbPort={nearestDbPort}
             selectedElectricalFixtureType={selectedElectricalFixtureType}
+            marqueeBox={marqueeBox}
+            dimensionDraft={dimensionDraft}
+            roomTagPreview={roomTagHover}
           />
         </g>
       </svg>
@@ -4871,6 +5184,46 @@ export default function Canvas({
               </select>
             </>
           )}
+
+          {selectedItem.type === "Dimension" && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11, backgroundColor: "#0F172A", padding: 8, borderRadius: 6, border: "1px solid #334155" }}>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Length:</span>
+                  <div style={{ color: "#38BDF8", fontWeight: 700 }}>{selectedItem.item.distance_mm || selectedItem.item.distance || 0} mm</div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Label:</span>
+                  <div style={{ color: "#F8FAFC", fontWeight: 600 }}>{selectedItem.item.label || 'Dimension'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedItem.type === "RoomTag" && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 12, color: "#CBD5E1", marginBottom: 4 }}>Room Name:</label>
+              <input
+                type="text"
+                defaultValue={selectedItem.item.roomName}
+                onBlur={(e) => {
+                  onLiveItemUpdate?.("AddRoomTag", selectedItem.item.id, { ...selectedItem.item, roomName: e.target.value });
+                }}
+                style={{ width: "100%", background: "#1E293B", border: "1px solid #475569", color: "white", padding: "6px 8px", borderRadius: 4, marginBottom: 8 }}
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11, backgroundColor: "#0F172A", padding: 8, borderRadius: 6, border: "1px solid #334155" }}>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Net Area:</span>
+                  <div style={{ color: "#10B981", fontWeight: 700 }}>{selectedItem.item.areaM2} m²</div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Airflow Req:</span>
+                  <div style={{ color: "#38BDF8", fontWeight: 700 }}>{selectedItem.item.reqAirflowCfm || 100} CFM</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #334155", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <button
               type="button"
@@ -4887,7 +5240,9 @@ export default function Canvas({
                 else if (type === "ElectricalComponent" || type === "Electrical") onLiveItemUpdate?.("DeleteElectricalComponent", id);
                 else if (type === "HVAC") onLiveItemUpdate?.("DeleteHVAC", id);
                 else if (type === "Door" || type === "Window") onLiveItemUpdate?.("DeleteOpening", id);
-                setSelectedItem(null);
+                else if (type === "Dimension") onLiveItemUpdate?.("DeleteDimension", id);
+                else if (type === "RoomTag") onLiveItemUpdate?.("DeleteRoomTag", id);
+                setInternalSelectedItem(null);
               }}
               style={{
                 display: "flex",
@@ -5153,6 +5508,17 @@ export default function Canvas({
         electricalCircuits={electricalCircuits}
         selectedElectricalFixtureType={selectedElectricalFixtureType}
         onChangeElectricalFixtureType={setSelectedElectricalFixtureType}
+        multiSelection={multiSelection}
+        onBatchDelete={handleBatchDelete}
+        onClearSelection={handleClearSelection}
+        dimensionMode={dimensionMode}
+        onChangeDimensionMode={setDimensionMode}
+        dimensionUnit={dimensionUnit}
+        onChangeDimensionUnit={setDimensionUnit}
+        onAutoOuterWallDimensions={handleAutoOuterWallDimensions}
+        selectedRoomType={selectedRoomType}
+        onChangeRoomType={setSelectedRoomType}
+        onAutoTagRooms={handleAutoTagRooms}
       />
     </div>
   );
