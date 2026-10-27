@@ -1164,3 +1164,55 @@ def project_plumbing_hydraulics_endpoint(project_id: str):
         "hydraulic_demand": demand_res,
         "storage_and_pumps": storage_res
     }
+
+
+
+@app.post("/api/hvac/vrf-sizing")
+def vrf_sizing_endpoint(payload: Dict[str, Any] = Body(...)):
+    """
+    Sizes VRF Multi-Split Heat Recovery systems, ODU master capacity, Combination Ratio,
+    field refrigerant charge, and ASHRAE 15 RCL safety per AHRI 1230.
+    """
+    from backend.vrf_engine import VRFSystemRequest, perform_vrf_system_analysis
+    req = VRFSystemRequest(**payload)
+    return perform_vrf_system_analysis(req)
+
+
+@app.get("/api/projects/{project_id}/vrf-system-design")
+def project_vrf_system_design_endpoint(
+    project_id: str,
+    refrigerant: str = "R410A",
+    system_type: str = "heat_recovery_3pipe"
+):
+    """
+    Calculates whole-building VRF heat recovery design from CAD room thermal loads.
+    """
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    cad_data = proj.get("cad_json_data", {})
+    rooms = cad_data.get("rooms", [])
+    from backend.vrf_engine import VRFSystemRequest, IndoorUnitInput, perform_vrf_system_analysis
+    idus = []
+    for r in rooms:
+        r_name = r.get("name", "Room")
+        area = float(r.get("area", 20.0))
+        w = area * 125.0
+        idus.append(IndoorUnitInput(
+            room_name=r_name,
+            room_area_sqm=area,
+            cooling_load_watts=w,
+            pipe_distance_to_odu_m=20.0
+        ))
+    if not idus:
+        idus = [
+            IndoorUnitInput(room_name="Living Room", room_area_sqm=30.0, cooling_load_watts=3800),
+            IndoorUnitInput(room_name="Master Bed", room_area_sqm=20.0, cooling_load_watts=2500)
+        ]
+    req = VRFSystemRequest(
+        project_name=proj.get("name", "Project"),
+        refrigerant_type=refrigerant,
+        system_type=system_type,
+        indoor_units=idus
+    )
+    return perform_vrf_system_analysis(req)
