@@ -89,7 +89,13 @@ export default function CadStatusBar({
   // 2D Electrical Load & Solar PV Studio (Cycle 24)
   showSolarPv = false,
   onToggleSolarPv,
-  onOpenElectricalPvStudio
+  onOpenElectricalPvStudio,
+  // Construction Documentation & Drawing Standards (Cycle 25)
+  showRevClouds = false,
+  onToggleRevClouds,
+  showLegend = false,
+  onToggleLegend,
+  onOpenDocStudio
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -1234,6 +1240,75 @@ export default function CadStatusBar({
           >
             <span>⚡</span>
             <span>ELEC &amp; PV</span>
+          </button>
+        )}
+
+        {/* REVISION CLOUDS TOGGLE (Cycle 25) */}
+        {onToggleRevClouds && (
+          <button
+            type="button"
+            onClick={onToggleRevClouds}
+            style={{
+              padding: '3px 8px',
+              borderRadius: '4px',
+              backgroundColor: showRevClouds ? '#DC2626' : '#1E293B',
+              border: `1px solid ${showRevClouds ? '#EF4444' : '#334155'}`,
+              color: showRevClouds ? '#FFFFFF' : '#94A3B8',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer'
+            }}
+            title="Toggle AIA Scalloped Revision Clouds & Delta Tags"
+          >
+            ☁️ REVS {showRevClouds ? 'ON' : 'OFF'}
+          </button>
+        )}
+
+        {/* DRAWING LEGEND TOGGLE (Cycle 25) */}
+        {onToggleLegend && (
+          <button
+            type="button"
+            onClick={onToggleLegend}
+            style={{
+              padding: '3px 8px',
+              borderRadius: '4px',
+              backgroundColor: showLegend ? '#0284C7' : '#1E293B',
+              border: `1px solid ${showLegend ? '#38BDF8' : '#334155'}`,
+              color: showLegend ? '#FFFFFF' : '#94A3B8',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer'
+            }}
+            title="Toggle On-Canvas ISO 128 / AIA Construction Symbol Legend"
+          >
+            📋 LEGEND {showLegend ? 'ON' : 'OFF'}
+          </button>
+        )}
+
+        {/* CONSTRUCTION DOC STUDIO (Cycle 25) */}
+        {onOpenDocStudio && (
+          <button
+            type="button"
+            onClick={onOpenDocStudio}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '4px',
+              backgroundColor: '#4F46E5',
+              border: '1px solid #818CF8',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 0 10px rgba(129, 140, 248, 0.35)',
+              transition: 'all 0.15s ease'
+            }}
+            title="Open Construction Documentation & Drawing Production Studio (AIA / ISO 128)"
+          >
+            <span>📑</span>
+            <span>DOCS</span>
           </button>
         )}
       </div>

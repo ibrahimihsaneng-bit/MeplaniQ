@@ -65,6 +65,10 @@ import {
 } from './features/cad2d/clashDetectionEngine';
 import { compileFloorplanThermalZones } from './features/cad2d/thermalZoneEngine';
 import { generateRooftopPvArray } from './features/cad2d/solarPvLayoutEngine';
+import {
+  generateProjectRevisionClouds,
+  compileActiveDrawingLegend
+} from './features/cad2d/constructionDocEngine';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1033,7 +1037,12 @@ export default function Canvas({
   onOpenThermalStudio,
   showSolarPv = false,
   onToggleSolarPv,
-  onOpenElectricalPvStudio
+  onOpenElectricalPvStudio,
+  showRevClouds = false,
+  onToggleRevClouds,
+  showLegend = false,
+  onToggleLegend,
+  onOpenDocStudio
 }) {
   const svgRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -1073,6 +1082,17 @@ export default function Canvas({
     if (!showSolarPv) return { modules: [], strings: [], inverters: [], metrics: {} };
     return generateRooftopPvArray(solveData);
   }, [showSolarPv, solveData]);
+
+  // Construction Documentation & Revision Clouds (Cycle 25)
+  const projectRevClouds = useMemo(() => {
+    if (!showRevClouds) return [];
+    return generateProjectRevisionClouds(solveData);
+  }, [showRevClouds, solveData]);
+
+  const activeLegendItems = useMemo(() => {
+    if (!showLegend) return [];
+    return compileActiveDrawingLegend(solveData);
+  }, [showLegend, solveData]);
 
   // On-Canvas Real-Time Plumbing & Hydraulics KPI Metrics
   const canvasPlumbingKpi = useMemo(() => {
@@ -4735,6 +4755,114 @@ export default function Canvas({
             </g>
           )}
 
+          {/* LAYER_REVCLOUDS (Cycle 25: AIA Scalloped Revision Clouds & Delta Tags) */}
+          {showRevClouds && (
+            <g id="LAYER_REVCLOUDS" style={{ pointerEvents: 'auto' }}>
+              {projectRevClouds.map((cloud, cIdx) => (
+                <g key={`revcloud-${cloud.id || cIdx}`}>
+                  {/* Scalloped Revision Arc Path */}
+                  <path
+                    d={cloud.svgPath}
+                    fill="none"
+                    stroke="#EF4444"
+                    strokeWidth={2.5 / zoom}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+
+                  {/* Standard AIA Triangular Revision Delta Tag */}
+                  <g transform={`translate(${cloud.deltaTag.x}, ${cloud.deltaTag.y}) scale(${1 / zoom}, ${-1 / zoom})`} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                    <polygon
+                      points="0,-14 -12,8 12,8"
+                      fill="#DC2626"
+                      stroke="#FFFFFF"
+                      strokeWidth="1.2"
+                    />
+                    <text
+                      y="4"
+                      textAnchor="middle"
+                      fill="#FFFFFF"
+                      fontSize="9"
+                      fontWeight="900"
+                      fontFamily="monospace"
+                    >
+                      {cloud.deltaTag.code.replace('REV-', '')}
+                    </text>
+                    <rect
+                      x="-65"
+                      y="12"
+                      width="130"
+                      height="20"
+                      rx="4"
+                      fill="rgba(15, 23, 42, 0.92)"
+                      stroke="#EF4444"
+                      strokeWidth="1"
+                    />
+                    <text
+                      y="26"
+                      textAnchor="middle"
+                      fill="#F8FAFC"
+                      fontSize="8"
+                      fontWeight="700"
+                    >
+                      ▲ {cloud.deltaTag.code} ({cloud.deltaTag.author})
+                    </text>
+                  </g>
+                </g>
+              ))}
+            </g>
+          )}
+
+          {/* LAYER_DRAWING_LEGEND (Cycle 25: Automated On-Canvas Symbol Legend) */}
+          {showLegend && activeLegendItems.length > 0 && (
+            <g id="LAYER_DRAWING_LEGEND" transform="translate(100, 100)" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+              <g transform={`scale(${1 / zoom}, ${-1 / zoom})`}>
+                <rect
+                  x="0"
+                  y="0"
+                  width="260"
+                  height={activeLegendItems.length * 20 + 36}
+                  rx="6"
+                  fill="rgba(15, 23, 42, 0.94)"
+                  stroke="#38BDF8"
+                  strokeWidth="1.5"
+                />
+                <text
+                  x="14"
+                  y="22"
+                  fill="#38BDF8"
+                  fontSize="10"
+                  fontWeight="800"
+                  letterSpacing="0.4px"
+                >
+                  DRAWING SYMBOL LEGEND (AIA / ISO)
+                </text>
+                {activeLegendItems.map((item, itIdx) => (
+                  <g key={item.id} transform={`translate(14, ${36 + itIdx * 20})`}>
+                    <line
+                      x1="0"
+                      y1="0"
+                      x2="28"
+                      y2="0"
+                      stroke={item.color}
+                      strokeWidth={Math.min(3, item.strokeWidth)}
+                      strokeDasharray={item.lineStyle === 'dashed' ? '4 2' : (item.lineStyle === 'dotted' ? '2 2' : undefined)}
+                    />
+                    <text
+                      x="36"
+                      y="3.5"
+                      fill="#F8FAFC"
+                      fontSize="8.5"
+                      fontWeight="600"
+                    >
+                      {item.label}
+                    </text>
+                  </g>
+                ))}
+              </g>
+            </g>
+          )}
+
           {/* LAYER_ANNOTATIONS */}
           <g
             id="LAYER_ANNOTATIONS"
@@ -5987,6 +6115,11 @@ export default function Canvas({
         showSolarPv={showSolarPv}
         onToggleSolarPv={onToggleSolarPv}
         onOpenElectricalPvStudio={onOpenElectricalPvStudio}
+        showRevClouds={showRevClouds}
+        onToggleRevClouds={onToggleRevClouds}
+        showLegend={showLegend}
+        onToggleLegend={onToggleLegend}
+        onOpenDocStudio={onOpenDocStudio}
       />
     </div>
   );

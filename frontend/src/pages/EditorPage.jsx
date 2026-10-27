@@ -52,6 +52,7 @@ import CadSheetLayoutModal from '../features/cad2d/CadSheetLayoutModal';
 import AutoCadLispStudioModal from '../features/cad2d/AutoCadLispStudioModal';
 import ThermalZoneStudioModal from '../features/cad2d/ThermalZoneStudioModal';
 import ElectricalLoadPvStudioModal from '../features/cad2d/ElectricalLoadPvStudioModal';
+import ConstructionDocStudioModal from '../features/cad2d/ConstructionDocStudioModal';
 import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
 import { downloadIfc4Model } from '../features/mep/ifcExportBridge';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
@@ -106,6 +107,9 @@ export default function EditorPage() {
   const [isThermalStudioOpen, setIsThermalStudioOpen] = useState(false);
   const [showSolarPv, setShowSolarPv] = useState(false);
   const [isElectricalPvStudioOpen, setIsElectricalPvStudioOpen] = useState(false);
+  const [showRevClouds, setShowRevClouds] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
+  const [isDocStudioOpen, setIsDocStudioOpen] = useState(false);
 
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -2248,7 +2252,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={24} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={25} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2554,6 +2558,31 @@ export default function EditorPage() {
             title="Open 3-Phase Electrical Load Balancing & Solar PV Rooftop Studio (NEC 220 / IEEE 1547)"
           >
             <span>⚡ Elec &amp; PV</span>
+          </button>
+
+          {/* 📑 Multi-Discipline Construction Documentation Studio (Cycle 25) */}
+          <button
+            onClick={() => setIsDocStudioOpen(true)}
+            disabled={!solveData}
+            style={{
+              background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
+              border: '1px solid #818CF8',
+              color: '#FFFFFF',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.4)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Open Multi-Discipline Construction Documentation Studio (AIA / ISO 128 Standards & Master Sheet Index)"
+          >
+            <span>📑 Doc Studio</span>
           </button>
 
           {/* 🚰 Advanced Plumbing & Hydraulics Suite */}
@@ -3182,6 +3211,11 @@ export default function EditorPage() {
                   showSolarPv={showSolarPv}
                   onToggleSolarPv={() => setShowSolarPv(prev => !prev)}
                   onOpenElectricalPvStudio={() => setIsElectricalPvStudioOpen(true)}
+                  showRevClouds={showRevClouds}
+                  onToggleRevClouds={() => setShowRevClouds(prev => !prev)}
+                  showLegend={showLegend}
+                  onToggleLegend={() => setShowLegend(prev => !prev)}
+                  onOpenDocStudio={() => setIsDocStudioOpen(true)}
                   onCursorMove={setCursorCoords}
                   viewTransform={viewTransform}
                   setViewTransform={setViewTransform}
@@ -3411,6 +3445,18 @@ export default function EditorPage() {
         solveData={solveData}
         showSolarPv={showSolarPv}
         onToggleSolarPv={() => setShowSolarPv(prev => !prev)}
+        projectName={solveData?.project_name || 'Floorplan'}
+      />
+
+      {/* Multi-Discipline Construction Documentation Studio Modal (Cycle 25) */}
+      <ConstructionDocStudioModal
+        isOpen={isDocStudioOpen}
+        onClose={() => setIsDocStudioOpen(false)}
+        solveData={solveData}
+        showRevClouds={showRevClouds}
+        onToggleRevClouds={() => setShowRevClouds(prev => !prev)}
+        showLegend={showLegend}
+        onToggleLegend={() => setShowLegend(prev => !prev)}
         projectName={solveData?.project_name || 'Floorplan'}
       />
 
