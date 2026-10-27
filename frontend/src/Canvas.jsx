@@ -35,6 +35,14 @@ import {
   findNearestDuct,
   generateFlexDuctPath
 } from './features/cad2d/ductRoutingEngine';
+import {
+  CONDUIT_TYPES,
+  WIRE_GAUGES,
+  extractElectricalPorts,
+  findNearestElectricalPort,
+  calculateCircuitLoading,
+  generateHomerunLeader
+} from './features/cad2d/electricalRoutingEngine';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1209,6 +1217,57 @@ export default function Canvas({
     setDraftingState({ active: false, tool: null, points: [], isNearStart: false, startPort: null });
   }, [draftingState, ductSystem, ductWidth, ductHeight, ductCfm, solveData, onLiveItemUpdate]);
 
+  // ─── Electrical Conduit & Homerun State ────────────────────────────────────
+  const [electricalToolMode, setElectricalToolMode] = useState('component'); // 'component' | 'conduit' | 'homerun'
+  const [conduitType, setConduitType] = useState('SLAB');
+  const [wireGauge, setWireGauge] = useState('2.5');
+  const [activeCircuitId, setActiveCircuitId] = useState('CKT-1');
+  const [snappedElectricalPort, setSnappedElectricalPort] = useState(null);
+
+  const electricalPorts = useMemo(() => {
+    const activeComps = (electricalComponents && electricalComponents.length > 0)
+      ? electricalComponents
+      : (solveData?.electrical_components || []);
+    return extractElectricalPorts(activeComps);
+  }, [electricalComponents, solveData]);
+
+  const nearestDbPort = useMemo(() => {
+    return electricalPorts.find(p => p.isDb) || electricalPorts[0] || null;
+  }, [electricalPorts]);
+
+  const handleFinishConduitRouting = useCallback((targetEndPort = null) => {
+    if (!draftingState.points || draftingState.points.length < 2) return;
+    const finalPoints = draftingState.points.map(p => [Math.round(p.x), Math.round(p.y)]);
+    const currentCStyle = CONDUIT_TYPES[conduitType] || CONDUIT_TYPES.SLAB;
+    const activeR = (electricalRoutes && electricalRoutes.length > 0) ? electricalRoutes : (solveData?.electrical_routes || []);
+    const rCount = activeR.length + 1;
+    const rId = `COND-${rCount}`;
+
+    let totalLengthMm = 0;
+    for (let i = 0; i < finalPoints.length - 1; i++) {
+      totalLengthMm += Math.hypot(finalPoints[i + 1][0] - finalPoints[i][0], finalPoints[i + 1][1] - finalPoints[i][1]);
+    }
+
+    const fromId = draftingState.startPort?.componentId || null;
+    const toId = targetEndPort?.componentId || null;
+
+    const newRoute = {
+      id: rId,
+      name: `${currentCStyle.name} ${rId}`,
+      conduit_type: conduitType.toLowerCase(),
+      points: finalPoints,
+      circuit_id: activeCircuitId,
+      wire_gauge: `${wireGauge}mm²`,
+      total_length_mm: Math.round(totalLengthMm),
+      from_component_id: fromId,
+      to_component_id: toId
+    };
+
+    onLiveItemUpdate?.('AddElectricalRoute', null, newRoute);
+    setDraftingState({ active: false, tool: null, points: [], isNearStart: false, startPort: null });
+    setSnappedElectricalPort(null);
+  }, [draftingState, conduitType, activeCircuitId, wireGauge, electricalRoutes, solveData, onLiveItemUpdate]);
+
   const handleCloseRoomLoop = useCallback(() => {
     if (!draftingState.points || draftingState.points.length < 3) return;
     const pts = draftingState.points.map(p => [Math.round(p.x), Math.round(p.y)]);
@@ -1282,6 +1341,9 @@ export default function Canvas({
         } else if (activeTool === 'hvac') {
           e.preventDefault();
           setHvacToolMode(prev => prev === 'duct' ? 'diffuser' : 'duct');
+        } else if (activeTool === 'electrical') {
+          e.preventDefault();
+          setElectricalToolMode(prev => prev === 'component' ? 'conduit' : (prev === 'conduit' ? 'homerun' : 'component'));
         }
       } else if (e.key === 'c' || e.key === 'C') {
         if (draftingState.active && draftingState.tool === 'wall' && draftingState.points?.length >= 3) {
@@ -1295,6 +1357,9 @@ export default function Canvas({
         } else if (draftingState.active && draftingState.tool === 'duct' && draftingState.points?.length >= 2) {
           e.preventDefault();
           handleFinishDuctRouting();
+        } else if (draftingState.active && draftingState.tool === 'conduit' && draftingState.points?.length >= 2) {
+          e.preventDefault();
+          handleFinishConduitRouting(snappedElectricalPort);
         } else if (draftingState.active && draftingState.tool === 'wall' && draftingState.points?.length >= 2) {
           e.preventDefault();
           handleFinishWallChain();
@@ -1347,6 +1412,7 @@ export default function Canvas({
           else if (type === "PlumbingPipe") onLiveItemUpdate?.("DeletePlumbingPipe", id);
           else if (type === "HvacDuct") onLiveItemUpdate?.("DeleteHvacDuct", id);
           else if (type === "HvacDiffuser") onLiveItemUpdate?.("DeleteHvacDiffuser", id);
+          else if (type === "ElectricalRoute") onLiveItemUpdate?.("DeleteElectricalRoute", id);
           else if (type === "ElectricalComponent" || type === "Electrical") onLiveItemUpdate?.("DeleteElectricalComponent", id);
           else if (type === "HVAC") onLiveItemUpdate?.("DeleteHVAC", id);
           else if (type === "Door" || type === "Window") onLiveItemUpdate?.("DeleteOpening", id);
@@ -1356,7 +1422,7 @@ export default function Canvas({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem, draftingState, handleCloseRoomLoop, handleFinishWallChain, handleFinishPipeRouting, handleFinishDuctRouting, handleCancelDrafting, showGrid, activeTool, pipeSystem, handlePipeSystemChange, snappedPort, hvacToolMode]);
+  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem, draftingState, handleCloseRoomLoop, handleFinishWallChain, handleFinishPipeRouting, handleFinishDuctRouting, handleFinishConduitRouting, handleCancelDrafting, showGrid, activeTool, pipeSystem, handlePipeSystemChange, snappedPort, hvacToolMode, electricalToolMode, snappedElectricalPort]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -1415,6 +1481,15 @@ export default function Canvas({
       setNearestDuctTakeoff(null);
     }
 
+    // Fixture port snapping for electrical tool
+    let foundElPort = null;
+    if (activeTool === 'electrical') {
+      foundElPort = findNearestElectricalPort(coords, electricalPorts, 220 / zoom);
+      setSnappedElectricalPort(foundElPort);
+    } else if (snappedElectricalPort) {
+      setSnappedElectricalPort(null);
+    }
+
     const snapResult = findNearestOsnap(coords, solveData, zoom, {
       enabled: osnapActive,
       activeStartPoint: lastDraftPt,
@@ -1424,9 +1499,9 @@ export default function Canvas({
     setOsnapPt(snapResult);
 
     // Apply Snapped Port or OSNAP or Ortho
-    let effectivePt = foundPort ? foundPort.point : (snapResult ? snapResult.point : coords);
-    if (!foundPort && !snapResult && lastDraftPt) {
-      if (orthoActive || draftingState.tool === 'pipe' || draftingState.tool === 'duct') {
+    let effectivePt = foundPort ? foundPort.point : (foundElPort ? foundElPort.point : (snapResult ? snapResult.point : coords));
+    if (!foundPort && !foundElPort && !snapResult && lastDraftPt) {
+      if (orthoActive || draftingState.tool === 'pipe' || draftingState.tool === 'duct' || draftingState.tool === 'conduit') {
         effectivePt = applyOrthoConstraint(lastDraftPt, coords, e.shiftKey);
       } else if (polarActive) {
         effectivePt = applyPolarConstraint(lastDraftPt, coords, 45);
@@ -1663,6 +1738,81 @@ export default function Canvas({
       return;
     }
 
+    // Interactive 2D Electrical Conduit Routing, Homerun & Component Placement
+    if (activeTool === 'electrical' && e.button === 0) {
+      if (electricalToolMode === 'homerun') {
+        const targetPt = snappedElectricalPort ? snappedElectricalPort.point : cadCursorPt;
+        const targetDb = nearestDbPort ? nearestDbPort.point : null;
+        const homerun = generateHomerunLeader(targetPt, targetDb, 3);
+        if (homerun) {
+          const activeR = (electricalRoutes && electricalRoutes.length > 0) ? electricalRoutes : (solveData?.electrical_routes || []);
+          const rId = `HR-${activeR.length + 1}`;
+          const newHomerun = {
+            id: rId,
+            name: `Homerun ${activeCircuitId}`,
+            type: 'homerun',
+            conduit_type: conduitType.toLowerCase(),
+            points: [
+              [Math.round(homerun.stemStart.x), Math.round(homerun.stemStart.y)],
+              [Math.round(homerun.stemEnd.x), Math.round(homerun.stemEnd.y)]
+            ],
+            circuit_id: activeCircuitId,
+            arrow_points: homerun.arrowPointsStr,
+            slashes: homerun.slashes,
+            is_homerun: true,
+            wire_gauge: `${wireGauge}mm²`
+          };
+          onLiveItemUpdate?.('AddElectricalRoute', null, newHomerun);
+        }
+        return;
+      }
+
+      if (electricalToolMode === 'conduit') {
+        const targetPt = snappedElectricalPort ? snappedElectricalPort.point : cadCursorPt;
+
+        if (!draftingState.active || draftingState.tool !== 'conduit') {
+          setDraftingState({
+            active: true,
+            tool: 'conduit',
+            points: [targetPt],
+            startPort: snappedElectricalPort || null
+          });
+        } else {
+          const lastPt = draftingState.points[draftingState.points.length - 1];
+          const ortho = generateOrthogonalPath(lastPt, targetPt);
+          const newPoints = [...draftingState.points.slice(0, -1), ...ortho];
+
+          if (snappedElectricalPort && (!draftingState.startPort || snappedElectricalPort.id !== draftingState.startPort.id)) {
+            draftingState.points = newPoints;
+            handleFinishConduitRouting(snappedElectricalPort);
+          } else {
+            setDraftingState(prev => ({
+              ...prev,
+              points: newPoints
+            }));
+          }
+        }
+        return;
+      }
+
+      if (electricalToolMode === 'component') {
+        const pt = cadCursorPt || getSvgCoordinates(e);
+        const spec = ELECTRICAL_FIXTURES[selectedElectricalFixtureType] || ELECTRICAL_FIXTURES.recessed_downlight;
+        onLiveItemUpdate?.('AddElectricalComponent', null, {
+          type: selectedElectricalFixtureType || 'recessed_downlight',
+          name: spec.label,
+          category: spec.category,
+          mounting: spec.mounting,
+          wattage: spec.defaultWattage,
+          circuit_id: activeCircuitId,
+          x: Math.round(pt.x),
+          y: Math.round(pt.y),
+          rotation: 0
+        });
+        return;
+      }
+    }
+
     // Smart Wall-Hosted Door Placement
     if (activeTool === 'door' && e.button === 0) {
       if (closestWall && onLiveItemUpdate) {
@@ -1740,25 +1890,6 @@ export default function Canvas({
 
   const handleMouseUp = (e) => {
     setIsPanning(false);
-
-    if (e && activeTool === 'electrical' && onLiveItemUpdate && !dragState) {
-      const dist = Math.hypot(e.clientX - panStart.x, e.clientY - panStart.y);
-      if (dist < 6) {
-        const pt = getSvgCoordinates(e);
-        const spec = ELECTRICAL_FIXTURES[selectedElectricalFixtureType] || ELECTRICAL_FIXTURES.recessed_downlight;
-        onLiveItemUpdate('AddElectricalComponent', null, {
-          type: selectedElectricalFixtureType || 'recessed_downlight',
-          name: spec.label,
-          category: spec.category,
-          mounting: spec.mounting,
-          wattage: spec.defaultWattage,
-          x: Math.round(pt.x),
-          y: Math.round(pt.y),
-          rotation: 0
-        });
-        return;
-      }
-    }
 
     if (dragState && onLiveItemUpdate) {
       if (dragState.type === "RoomResize") {
@@ -3782,28 +3913,73 @@ export default function Canvas({
 
                   const pointsStr = pts.map(p => `${p[0]},${p[1]}`).join(' ');
                   const conduitStyle = CONDUIT_STYLES[route.conduit_type] || CONDUIT_STYLES.slab_conduit;
-                  
+                  const isRouteSelected = selectedItem?.item?.id === route.id && selectedItem?.type === "ElectricalRoute";
+                  const routeColor = isRouteSelected ? "#FFFFFF" : (conduitStyle.color || '#F59E0B');
+
                   return (
-                    <g key={`route-${route.id || rIdx}`} className="electrical-conduit-route">
+                    <g
+                      key={`route-${route.id || rIdx}`}
+                      className="electrical-conduit-route"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedItem({ type: "ElectricalRoute", item: route });
+                      }}
+                      style={{
+                        cursor: "pointer",
+                        filter: isRouteSelected ? "drop-shadow(0px 0px 8px #F59E0B)" : "none"
+                      }}
+                    >
                       {/* Outer conduit casing */}
                       <polyline
                         points={pointsStr}
                         fill="none"
-                        stroke={conduitStyle.color || '#F59E0B'}
-                        strokeWidth={(conduitStyle.strokeWidth || 2.5) / zoom}
+                        stroke={routeColor}
+                        strokeWidth={(isRouteSelected ? 3.5 : (conduitStyle.strokeWidth || 2.5)) / zoom}
                         strokeDasharray={conduitStyle.dasharray ? conduitStyle.dasharray.split(' ').map(n => n / zoom).join(' ') : 'none'}
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        opacity={0.8}
+                        opacity={0.85}
                       />
                       {/* Inner Phase line */}
                       <polyline
                         points={pointsStr}
                         fill="none"
-                        stroke="#F59E0B"
+                        stroke={isRouteSelected ? "#FDE68A" : "#F59E0B"}
                         strokeWidth={1.2 / zoom}
                         opacity={0.9}
                       />
+
+                      {/* Homerun Arrow & Conductor Ticks */}
+                      {route.is_homerun && (
+                        <g className="cad-homerun-graphics">
+                          {route.arrow_points && (
+                            <polygon
+                              points={route.arrow_points}
+                              fill="#F59E0B"
+                              stroke="#FFFFFF"
+                              strokeWidth={1 / zoom}
+                            />
+                          )}
+                          {(route.slashes || []).map((s, sIdx) => (
+                            <line
+                              key={`route-slash-${sIdx}`}
+                              x1={s.x1}
+                              y1={s.y1}
+                              x2={s.x2}
+                              y2={s.y2}
+                              stroke="#F59E0B"
+                              strokeWidth={2 / zoom}
+                              strokeLinecap="round"
+                            />
+                          ))}
+                          <g transform={`translate(${pts[pts.length - 1][0] + 25}, ${pts[pts.length - 1][1] + 25}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                            <rect x="-40" y="-8" width="80" height="16" rx="3" fill="#0F172A" stroke="#F59E0B" strokeWidth="1" />
+                            <text x="0" y="3" textAnchor="middle" fill="#FDE68A" fontSize="8" fontWeight="800">
+                              ⚡ {route.circuit_id || 'CKT-1'}
+                            </text>
+                          </g>
+                        </g>
+                      )}
                     </g>
                   );
                 })}
@@ -4270,6 +4446,14 @@ export default function Canvas({
             diffuserType={diffuserType}
             diffuserCfm={diffuserCfm}
             nearestDuctTakeoff={nearestDuctTakeoff}
+            electricalPorts={electricalPorts}
+            snappedElectricalPort={snappedElectricalPort}
+            electricalToolMode={electricalToolMode}
+            conduitType={conduitType}
+            wireGauge={wireGauge}
+            activeCircuitId={activeCircuitId}
+            nearestDbPort={nearestDbPort}
+            selectedElectricalFixtureType={selectedElectricalFixtureType}
           />
         </g>
       </svg>
@@ -4639,6 +4823,37 @@ export default function Canvas({
             </div>
           )}
 
+          {selectedItem.type === "ElectricalRoute" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", backgroundColor: "#0F172A", padding: "8px", borderRadius: "6px", fontSize: "11px" }}>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Conduit / Route:</span>
+                  <div style={{ color: "#F59E0B", fontWeight: 700 }}>
+                    {selectedItem.item.is_homerun ? "🏹 Homerun Lead" : (selectedItem.item.conduit_type || "PVC Slab Conduit").toUpperCase()}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Conductor Gauge:</span>
+                  <div style={{ color: "#FFFFFF", fontWeight: 700 }}>
+                    {selectedItem.item.wire_gauge || "2.5mm² Cu"}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Assigned Circuit:</span>
+                  <div style={{ color: "#38BDF8", fontWeight: 600 }}>
+                    {selectedItem.item.circuit_id || "CKT-1"}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#94A3B8" }}>Length:</span>
+                  <div style={{ color: "#34D399", fontWeight: 600 }}>
+                    {selectedItem.item.total_length_mm ? `${(selectedItem.item.total_length_mm / 1000).toFixed(1)} m` : "4.5 m"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {(selectedItem.type === "Door") && (
             <>
               <label style={{ display: "block", fontSize: 12, marginBottom: 4 }}>Swing</label>
@@ -4668,6 +4883,7 @@ export default function Canvas({
                 else if (type === "PlumbingPipe") onLiveItemUpdate?.("DeletePlumbingPipe", id);
                 else if (type === "HvacDuct") onLiveItemUpdate?.("DeleteHvacDuct", id);
                 else if (type === "HvacDiffuser") onLiveItemUpdate?.("DeleteHvacDiffuser", id);
+                else if (type === "ElectricalRoute") onLiveItemUpdate?.("DeleteElectricalRoute", id);
                 else if (type === "ElectricalComponent" || type === "Electrical") onLiveItemUpdate?.("DeleteElectricalComponent", id);
                 else if (type === "HVAC") onLiveItemUpdate?.("DeleteHVAC", id);
                 else if (type === "Door" || type === "Window") onLiveItemUpdate?.("DeleteOpening", id);
@@ -4899,7 +5115,11 @@ export default function Canvas({
         onFinishDrafting={
           draftingState.tool === 'pipe'
             ? () => handleFinishPipeRouting(snappedPort)
-            : (draftingState.tool === 'duct' ? handleFinishDuctRouting : handleFinishWallChain)
+            : (draftingState.tool === 'duct'
+                ? handleFinishDuctRouting
+                : (draftingState.tool === 'conduit'
+                    ? () => handleFinishConduitRouting(snappedElectricalPort)
+                    : handleFinishWallChain))
         }
         onCancelDrafting={handleCancelDrafting}
         onCloseRoom={handleCloseRoomLoop}
@@ -4922,6 +5142,17 @@ export default function Canvas({
         onChangeDiffuserType={handleDiffuserTypeChange}
         diffuserCfm={diffuserCfm}
         onChangeDiffuserCfm={setDiffuserCfm}
+        electricalToolMode={electricalToolMode}
+        onChangeElectricalToolMode={setElectricalToolMode}
+        conduitType={conduitType}
+        onChangeConduitType={setConduitType}
+        wireGauge={wireGauge}
+        onChangeWireGauge={setWireGauge}
+        activeCircuitId={activeCircuitId}
+        onChangeActiveCircuitId={setActiveCircuitId}
+        electricalCircuits={electricalCircuits}
+        selectedElectricalFixtureType={selectedElectricalFixtureType}
+        onChangeElectricalFixtureType={setSelectedElectricalFixtureType}
       />
     </div>
   );

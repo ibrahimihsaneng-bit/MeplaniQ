@@ -11,6 +11,12 @@ import {
   computeAirflowChevron,
   generateFlexDuctPath
 } from './ductRoutingEngine';
+import {
+  CONDUIT_TYPES,
+  WIRE_GAUGES,
+  calculateCircuitLoading,
+  generateHomerunLeader
+} from './electricalRoutingEngine';
 
 /**
  * CadCursorOverlay.jsx
@@ -20,6 +26,8 @@ import {
  *  - Rubber-Band Wall & Pipe Drafting Polylines with 90° Orthogonal Elbows
  *  - Interactive 2D HVAC Ductwork Rubber-Band (SMACNA Compliant Double-Line & Velocity HUD)
  *  - Ceiling Diffuser Air Throw Radius & Flex Duct Takeoff Previews
+ *  - Interactive 2D Electrical Conduit Routing & Homerun Arrow Generation
+ *  - Electrical Terminal Magnetic Port Snapping & Voltage Drop HUD
  *  - Fixture Connection Port Magnetic Snapping Rings
  *  - Live Dynamic Pipe Length, Diameter, Fall & Slope HUD
  *  - Door / Window Live Wall-Hosting Previews
@@ -47,7 +55,16 @@ export default function CadCursorOverlay({
   ductCfm = 400,
   diffuserType = 'SUPPLY_4WAY',
   diffuserCfm = 150,
-  nearestDuctTakeoff = null
+  nearestDuctTakeoff = null,
+  // Electrical Engine Props
+  electricalPorts = [],
+  snappedElectricalPort = null,
+  electricalToolMode = 'component',
+  conduitType = 'SLAB',
+  wireGauge = '2.5',
+  activeCircuitId = 'CKT-1',
+  nearestDbPort = null,
+  selectedElectricalFixtureType = 'recessed_downlight'
 }) {
   const glyphSize = 14 / zoom;
   const halfGlyph = glyphSize / 2;
@@ -104,6 +121,58 @@ export default function CadCursorOverlay({
                 />
                 <text x="8" y="15" fill="#FFFFFF" fontSize="9.5" fontWeight="700">
                   ⚡ {port.label}
+                </text>
+              </g>
+            )}
+          </g>
+        );
+      })}
+
+      {/* 1B. ELECTRICAL COMPONENT CONNECTION PORTS (When activeTool === 'electrical') */}
+      {activeTool === 'electrical' && electricalPorts.map(port => {
+        const isSnapped = snappedElectricalPort?.id === port.id;
+        const r = (isSnapped ? 13 : (port.isDb ? 11 : 7.5)) / zoom;
+        const color = port.color || '#F59E0B';
+
+        return (
+          <g key={port.id} transform={`translate(${port.point.x}, ${port.point.y})`}>
+            <circle
+              cx="0"
+              cy="0"
+              r={r}
+              fill={color}
+              fillOpacity={isSnapped ? 0.95 : 0.55}
+              stroke="#FFFFFF"
+              strokeWidth={(isSnapped ? 2.5 : 1.5) / zoom}
+            />
+            <circle cx="0" cy="0" r={r * 0.4} fill="#FFFFFF" />
+
+            {isSnapped && (
+              <circle
+                cx="0"
+                cy="0"
+                r={r * 1.6}
+                fill="none"
+                stroke={color}
+                strokeWidth={1.8 / zoom}
+                strokeDasharray={`${6 / zoom} ${4 / zoom}`}
+              />
+            )}
+
+            {isSnapped && (
+              <g transform={`scale(${1 / zoom}, ${-1 / zoom}) translate(16, -12)`}>
+                <rect
+                  x="0"
+                  y="0"
+                  width={port.label.length * 6.8 + 24}
+                  height="22"
+                  rx="4"
+                  fill="rgba(15, 23, 42, 0.95)"
+                  stroke={color}
+                  strokeWidth="1.2"
+                />
+                <text x="8" y="15" fill="#FFFFFF" fontSize="9.5" fontWeight="700">
+                  {port.label}
                 </text>
               </g>
             )}
@@ -715,6 +784,200 @@ export default function CadCursorOverlay({
                   />
                   <text x="0" y="4" textAnchor="middle" fill="#FFFFFF" fontSize="9" fontWeight="700">
                     {spec.icon} {spec.name} • {cfm} CFM
+                  </text>
+                </g>
+              </>
+            );
+          })()}
+        </g>
+      )}
+
+      {/* 9. LIVE ELECTRICAL CONDUIT ROUTING RUBBER-BAND */}
+      {draftingState?.active && draftingState.tool === 'conduit' && draftingState.points?.length > 0 && cursorPt && (
+        <g id="DRAFTING_CONDUIT_RUBBERBAND">
+          {(() => {
+            const currentCStyle = CONDUIT_TYPES[conduitType] || CONDUIT_TYPES.SLAB;
+            const strokeColor = currentCStyle.color;
+            const strokeW = (currentCStyle.strokeWidth || 2.2) / zoom;
+            const lastPt = draftingState.points[draftingState.points.length - 1];
+            const targetPt = snappedElectricalPort ? snappedElectricalPort.point : cursorPt;
+            const orthoPath = generateOrthogonalPath(lastPt, targetPt);
+            const allPoints = [...draftingState.points.slice(0, -1), ...orthoPath];
+
+            let totalLengthMm = 0;
+            for (let i = 0; i < allPoints.length - 1; i++) {
+              totalLengthMm += Math.hypot(allPoints[i + 1].x - allPoints[i].x, allPoints[i + 1].y - allPoints[i].y);
+            }
+
+            const loadMetrics = calculateCircuitLoading([], totalLengthMm, wireGauge);
+
+            return (
+              <>
+                {/* 1. Established Conduit Segments */}
+                {draftingState.points.map((pt, idx) => {
+                  if (idx === 0) return null;
+                  const prev = draftingState.points[idx - 1];
+                  return (
+                    <g key={`fixed-conduit-${idx}`}>
+                      <line
+                        x1={prev.x}
+                        y1={prev.y}
+                        x2={pt.x}
+                        y2={pt.y}
+                        stroke={strokeColor}
+                        strokeWidth={strokeW * 1.5}
+                        strokeLinecap="round"
+                        opacity={0.8}
+                      />
+                      <line
+                        x1={prev.x}
+                        y1={prev.y}
+                        x2={pt.x}
+                        y2={pt.y}
+                        stroke="#FFFFFF"
+                        strokeWidth={1 / zoom}
+                        strokeLinecap="round"
+                        opacity={0.9}
+                      />
+                    </g>
+                  );
+                })}
+
+                {/* 2. Active Stretching Orthogonal Conduit Segments */}
+                {orthoPath.map((pt, idx) => {
+                  if (idx === 0) return null;
+                  const prev = orthoPath[idx - 1];
+                  return (
+                    <g key={`ortho-conduit-${idx}`}>
+                      <line
+                        x1={prev.x}
+                        y1={prev.y}
+                        x2={pt.x}
+                        y2={pt.y}
+                        stroke={strokeColor}
+                        strokeWidth={strokeW * 1.5}
+                        strokeLinecap="round"
+                        strokeDasharray={`${8 / zoom} ${4 / zoom}`}
+                        opacity={0.85}
+                      />
+                      <line
+                        x1={prev.x}
+                        y1={prev.y}
+                        x2={pt.x}
+                        y2={pt.y}
+                        stroke="#FFFFFF"
+                        strokeWidth={1 / zoom}
+                        strokeLinecap="round"
+                        strokeDasharray={`${4 / zoom} ${4 / zoom}`}
+                        opacity={0.95}
+                      />
+                    </g>
+                  );
+                })}
+
+                {/* 3. Conduit Junction Circles at Corners */}
+                {allPoints.slice(1, -1).map((pt, idx) => (
+                  <circle
+                    key={`conduit-bend-${idx}`}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={5.5 / zoom}
+                    fill={strokeColor}
+                    stroke="#FFFFFF"
+                    strokeWidth={1.2 / zoom}
+                  />
+                ))}
+
+                {/* 4. Live Electrical Engineering HUD */}
+                {(() => {
+                  const midX = (lastPt.x + targetPt.x) / 2;
+                  const midY = (lastPt.y + targetPt.y) / 2;
+
+                  return (
+                    <g transform={`translate(${midX}, ${midY}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                      <rect
+                        x="-125"
+                        y="-18"
+                        width="250"
+                        height="36"
+                        rx="6"
+                        fill="rgba(15, 23, 42, 0.96)"
+                        stroke={strokeColor}
+                        strokeWidth="1.6"
+                      />
+                      <text x="0" y="-4" textAnchor="middle" fill="#FFFFFF" fontSize="9.5" fontWeight="800">
+                        {currentCStyle.icon} {currentCStyle.name} • {wireGauge}mm² Cu
+                      </text>
+                      <text x="0" y="10" textAnchor="middle" fill={loadMetrics.statusColor} fontSize="8.5" fontWeight="700">
+                        ⚡ {formatCadLength(totalLengthMm)} • Vdrop: {loadMetrics.voltageDropPercent}% ({loadMetrics.isCompliant ? '✓ <3% NEC' : '⚠ Exceeds Limit'})
+                      </text>
+                    </g>
+                  );
+                })()}
+              </>
+            );
+          })()}
+        </g>
+      )}
+
+      {/* 10. ELECTRICAL HOMERUN ARROW LEADER PREVIEW */}
+      {activeTool === 'electrical' && electricalToolMode === 'homerun' && cursorPt && (
+        <g id="ELECTRICAL_HOMERUN_PREVIEW">
+          {(() => {
+            const startPt = snappedElectricalPort ? snappedElectricalPort.point : cursorPt;
+            const targetDb = nearestDbPort ? nearestDbPort.point : null;
+            const homerun = generateHomerunLeader(startPt, targetDb, 3);
+            if (!homerun) return null;
+
+            return (
+              <>
+                {/* Stem Line */}
+                <line
+                  x1={homerun.stemStart.x}
+                  y1={homerun.stemStart.y}
+                  x2={homerun.stemEnd.x}
+                  y2={homerun.stemEnd.y}
+                  stroke="#F59E0B"
+                  strokeWidth={2.5 / zoom}
+                  strokeLinecap="round"
+                />
+
+                {/* Solid Arrowhead pointing towards DB */}
+                <polygon
+                  points={homerun.arrowPointsStr}
+                  fill="#F59E0B"
+                  stroke="#FFFFFF"
+                  strokeWidth={1 / zoom}
+                />
+
+                {/* Conductor Ticks (Phase, Neutral, Ground) */}
+                {homerun.slashes.map((s, sIdx) => (
+                  <line
+                    key={`slash-${sIdx}`}
+                    x1={s.x1}
+                    y1={s.y1}
+                    x2={s.x2}
+                    y2={s.y2}
+                    stroke="#F59E0B"
+                    strokeWidth={2 / zoom}
+                    strokeLinecap="round"
+                  />
+                ))}
+
+                {/* Homerun Engineering Tag */}
+                <g transform={`translate(${homerun.tagPos.x}, ${homerun.tagPos.y}) scale(${1 / zoom}, ${-1 / zoom})`}>
+                  <rect
+                    x="-75"
+                    y="-12"
+                    width="150"
+                    height="24"
+                    rx="5"
+                    fill="rgba(15, 23, 42, 0.95)"
+                    stroke="#F59E0B"
+                    strokeWidth="1.5"
+                  />
+                  <text x="0" y="4" textAnchor="middle" fill="#FDE68A" fontSize="9" fontWeight="800">
+                    ⚡ HOMERUN ► DB ({activeCircuitId})
                   </text>
                 </g>
               </>

@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 17, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 18, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -237,9 +237,21 @@ export default function AutonomousSprintTimer({ currentCycle = 17, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 17 (Hour 3): Interactive 2D HVAC Ductwork Routing &amp; Ceiling Diffuser Distribution
+                      Cycle 18 (Hour 4): Electrical Homeruns, Multi-Drop Conduit Routing &amp; Circuit Distribution
                     </span>
                     <span style={{ fontSize: '10px', color: '#34D399', fontWeight: 800 }}>LIVE</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                    Multi-drop branch conduit routing (Slab, Surface, FMC), terminal junction snaps, angled homerun arrows with 3-conductor tick marks &amp; NEC voltage drop calculations.
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
+                      Cycle 17 (Hour 3): Interactive 2D HVAC Ductwork Routing &amp; Ceiling Diffuser Distribution
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>✓ COMPLETED</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
                     Double-line SMACNA duct routing (Supply/Return/Exhaust/FA), live airflow CFM &amp; velocity FPM engineering HUD, 90° miter elbows, and ceiling diffuser drops with air throw radius rings &amp; flex duct snap takeoffs.
@@ -273,24 +285,24 @@ export default function AutonomousSprintTimer({ currentCycle = 17, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #38BDF8' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 18 (Hour 4): Electrical Homeruns, Multi-Drop Conduit Routing &amp; Circuit Distribution
+                      Cycle 19 (Hour 5): Continuous Aligned Dimension Strings &amp; Marquee Multi-Select
                     </span>
                     <span style={{ fontSize: '10px', color: '#38BDF8', fontWeight: 700 }}>NEXT HOUR</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
-                    Auto-routing conduit pathways connecting light fixtures and receptacles directly back to distribution boards (DB), panel load balancing &amp; NEC voltage drop calculations.
+                    Auto-aligned dimension chains along exterior and interior walls, marquee lasso multi-select, and mass batch geometric transform tools.
                   </div>
                 </div>
 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #64748B' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8' }}>
-                      Cycle 19-24 (Hours 5-24): Dimensions, Multi-Select &amp; BIM Suite
+                      Cycle 20-24 (Hours 6-24): Multi-Layer MEP Coordination &amp; Full BIM Suite
                     </span>
                     <span style={{ fontSize: '10px', color: '#64748B' }}>24H ROADMAP</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
-                    Continuous aligned dimension strings, marquee multi-select, room area auto-centroid program &amp; commercial verification.
+                    Cross-discipline clash collision avoidance, automated multi-page titleblock sheet export, and native AutoCAD AutoLISP compilation.
                   </div>
                 </div>
               </div>

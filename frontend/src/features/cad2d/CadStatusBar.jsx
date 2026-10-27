@@ -1,13 +1,14 @@
 import React from 'react';
 import { PLUMBING_SYSTEMS } from './pipeRoutingEngine';
 import { HVAC_DUCT_SYSTEMS, HVAC_DIFFUSER_TYPES, calculateDuctVelocity } from './ductRoutingEngine';
+import { CONDUIT_TYPES, WIRE_GAUGES } from './electricalRoutingEngine';
 
 /**
  * CadStatusBar.jsx
  * ================
  * Professional CAD Drafting Status Bar dock at the bottom of the 2D CAD canvas.
  * Provides live coordinate readouts, OSNAP/ORTHO status toggles, plumbing pipe selectors,
- * HVAC duct & diffuser selectors, and contextual drafting shortcuts.
+ * HVAC duct & diffuser selectors, Electrical conduit & homerun selectors, and contextual drafting shortcuts.
  */
 export default function CadStatusBar({
   cursorCoords = { x: 0, y: 0 },
@@ -44,12 +45,25 @@ export default function CadStatusBar({
   diffuserType = 'SUPPLY_4WAY',
   onChangeDiffuserType,
   diffuserCfm = 150,
-  onChangeDiffuserCfm
+  onChangeDiffuserCfm,
+  // Electrical System Selector Props
+  electricalToolMode = 'component',
+  onChangeElectricalToolMode,
+  conduitType = 'SLAB',
+  onChangeConduitType,
+  wireGauge = '2.5',
+  onChangeWireGauge,
+  activeCircuitId = 'CKT-1',
+  onChangeActiveCircuitId,
+  electricalCircuits = [],
+  selectedElectricalFixtureType = 'recessed_downlight',
+  onChangeElectricalFixtureType
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
   const currentDuctSys = HVAC_DUCT_SYSTEMS[ductSystem] || HVAC_DUCT_SYSTEMS.SUPPLY;
   const velMetrics = calculateDuctVelocity(ductCfm, ductWidth, ductHeight);
+  const currentConduitStyle = CONDUIT_TYPES[conduitType] || CONDUIT_TYPES.SLAB;
 
   return (
     <div
@@ -176,6 +190,42 @@ export default function CadStatusBar({
               <span style={{ color: '#0EA5E9', fontWeight: 700 }}>🪟 WINDOW TOOL:</span>
               <span>Hover over wall segment and click to place window.</span>
             </>
+          )}
+
+          {activeTool === 'electrical' && (
+            electricalToolMode === 'conduit' ? (
+              isDrafting ? (
+                <>
+                  <span style={{ color: currentConduitStyle.color, fontWeight: 700 }}>
+                    ● ROUTING {currentConduitStyle.name.toUpperCase()} ({wireGauge}mm²):
+                  </span>
+                  <span>Click fixture port to connect •</span>
+                  <span style={{ color: '#38BDF8' }}>[Enter]</span>
+                  <span>Finish •</span>
+                  <span style={{ color: '#EF4444' }}>[Esc]</span>
+                  <span>Cancel</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ color: '#F59E0B', fontWeight: 700 }}>⚡ CONDUIT ROUTER:</span>
+                  <span>Click fixture terminal port to start conduit branch •</span>
+                  <span style={{ color: '#FDE68A' }}>[Tab]</span>
+                  <span>Switch Tool</span>
+                </>
+              )
+            ) : (electricalToolMode === 'homerun' ? (
+              <>
+                <span style={{ color: '#F59E0B', fontWeight: 700 }}>🏹 HOMERUN LEADER:</span>
+                <span>Click terminal fixture to shoot homerun arrow back to Distribution Board (DB)</span>
+              </>
+            ) : (
+              <>
+                <span style={{ color: '#38BDF8', fontWeight: 700 }}>💡 ELECTRICAL FIXTURE:</span>
+                <span>Click canvas to place component •</span>
+                <span style={{ color: '#38BDF8' }}>[Tab]</span>
+                <span>Switch to Conduit / Homerun</span>
+              </>
+            ))
           )}
 
           {activeTool === 'select' && (
@@ -448,6 +498,201 @@ export default function CadStatusBar({
         </div>
       )}
 
+      {/* CENTER: Active Electrical System & Tool Quick Selector when activeTool === 'electrical' */}
+      {activeTool === 'electrical' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(30, 41, 59, 0.7)', padding: '2px 8px', borderRadius: '6px', border: '1px solid #334155' }}>
+          {/* Mode Toggle: Component vs Conduit vs Homerun */}
+          <div style={{ display: 'flex', backgroundColor: '#0F172A', borderRadius: '4px', padding: '1px', border: '1px solid #475569' }}>
+            <button
+              type="button"
+              onClick={() => onChangeElectricalToolMode?.('component')}
+              style={{
+                padding: '2px 7px',
+                borderRadius: '3px',
+                backgroundColor: electricalToolMode === 'component' ? '#38BDF8' : 'transparent',
+                border: 'none',
+                color: electricalToolMode === 'component' ? '#0F172A' : '#94A3B8',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              💡 Fixture
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeElectricalToolMode?.('conduit')}
+              style={{
+                padding: '2px 7px',
+                borderRadius: '3px',
+                backgroundColor: electricalToolMode === 'conduit' ? '#F59E0B' : 'transparent',
+                border: 'none',
+                color: electricalToolMode === 'conduit' ? '#0F172A' : '#94A3B8',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              ⚡ Conduit
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeElectricalToolMode?.('homerun')}
+              style={{
+                padding: '2px 7px',
+                borderRadius: '3px',
+                backgroundColor: electricalToolMode === 'homerun' ? '#10B981' : 'transparent',
+                border: 'none',
+                color: electricalToolMode === 'homerun' ? '#FFFFFF' : '#94A3B8',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              🏹 Homerun
+            </button>
+          </div>
+
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#475569', margin: '0 2px' }} />
+
+          {electricalToolMode === 'conduit' ? (
+            <>
+              {/* Conduit Type Picker */}
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>CONDUIT:</span>
+              {Object.values(CONDUIT_TYPES).slice(0, 3).map(ct => {
+                const isSelected = conduitType === ct.id;
+                return (
+                  <button
+                    key={ct.id}
+                    type="button"
+                    onClick={() => onChangeConduitType?.(ct.id)}
+                    style={{
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: isSelected ? ct.color : 'transparent',
+                      border: isSelected ? 'none' : '1px solid #475569',
+                      color: isSelected ? '#0F172A' : '#CBD5E1',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                    title={ct.name}
+                  >
+                    {ct.name.split(' ')[0]}
+                  </button>
+                );
+              })}
+
+              <div style={{ width: '1px', height: '14px', backgroundColor: '#475569', margin: '0 2px' }} />
+
+              {/* Wire Gauge Picker */}
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>WIRE:</span>
+              <select
+                value={wireGauge}
+                onChange={(e) => onChangeWireGauge?.(e.target.value)}
+                style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #475569',
+                  borderRadius: '4px',
+                  color: '#FDE68A',
+                  fontSize: '10.5px',
+                  padding: '2px 4px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                {Object.entries(WIRE_GAUGES).map(([k, w]) => (
+                  <option key={k} value={k}>{w.gauge} ({w.mcb})</option>
+                ))}
+              </select>
+
+              {/* Circuit Picker */}
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>CIRCUIT:</span>
+              <select
+                value={activeCircuitId}
+                onChange={(e) => onChangeActiveCircuitId?.(e.target.value)}
+                style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #475569',
+                  borderRadius: '4px',
+                  color: '#38BDF8',
+                  fontSize: '10.5px',
+                  padding: '2px 4px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                {(electricalCircuits && electricalCircuits.length > 0 ? electricalCircuits : [
+                  { id: 'CKT-1', name: 'CKT-1 (Lighting)' },
+                  { id: 'CKT-2', name: 'CKT-2 (Power Sockets)' },
+                  { id: 'CKT-3', name: 'CKT-3 (AC/Heater)' }
+                ]).map(c => (
+                  <option key={c.id} value={c.id}>{c.name || c.id}</option>
+                ))}
+              </select>
+            </>
+          ) : (electricalToolMode === 'homerun' ? (
+            <>
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>PANEL CKT:</span>
+              <select
+                value={activeCircuitId}
+                onChange={(e) => onChangeActiveCircuitId?.(e.target.value)}
+                style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #475569',
+                  borderRadius: '4px',
+                  color: '#FACC15',
+                  fontSize: '10.5px',
+                  padding: '2px 4px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                {(electricalCircuits && electricalCircuits.length > 0 ? electricalCircuits : [
+                  { id: 'CKT-1', name: 'CKT-1 (Lighting)' },
+                  { id: 'CKT-2', name: 'CKT-2 (Power Sockets)' },
+                  { id: 'CKT-3', name: 'CKT-3 (AC/Heater)' }
+                ]).map(c => (
+                  <option key={c.id} value={c.id}>{c.name || c.id}</option>
+                ))}
+              </select>
+              <span style={{ color: '#10B981', fontSize: '10px', fontWeight: 700 }}>
+                ✓ Conductor: 3W (P+N+E) • 2.5mm² Cu
+              </span>
+            </>
+          ) : (
+            <>
+              {/* Fixture Component Picker */}
+              <span style={{ color: '#94A3B8', fontSize: '10px', fontWeight: 700 }}>FIXTURE:</span>
+              <select
+                value={selectedElectricalFixtureType}
+                onChange={(e) => onChangeElectricalFixtureType?.(e.target.value)}
+                style={{
+                  backgroundColor: '#0F172A',
+                  border: '1px solid #475569',
+                  borderRadius: '4px',
+                  color: '#38BDF8',
+                  fontSize: '10.5px',
+                  padding: '2px 4px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                <option value="recessed_downlight">💡 Downlight (15W)</option>
+                <option value="surface_ceiling_light">💡 Ceiling Light (24W)</option>
+                <option value="switch_1way">🔘 1-Way Switch</option>
+                <option value="switch_2way">🔘 2-Way Switch</option>
+                <option value="receptacle_duplex">🔌 16A Duplex Socket (200W)</option>
+                <option value="receptacle_single">🔌 Single Socket (100W)</option>
+                <option value="distribution_board">⚡ DB Main Panel (10kW)</option>
+                <option value="ceiling_fan">🌀 Ceiling Fan (75W)</option>
+                <option value="ac_isolator">❄️ AC Isolator (2500W)</option>
+              </select>
+            </>
+          ))}
+        </div>
+      )}
+
       {/* RIGHT: Drafting Status Toggles & Action Buttons */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         {/* Active Drafting Action Controls */}
@@ -478,16 +723,16 @@ export default function CadStatusBar({
               style={{
                 padding: '3px 10px',
                 borderRadius: '4px',
-                backgroundColor: activeTool === 'hvac' ? currentDuctSys.color : (activeTool === 'plumbing' ? currentSys.color : '#1E293B'),
-                border: `1px solid ${activeTool === 'hvac' || activeTool === 'plumbing' ? '#FFFFFF' : '#475569'}`,
-                color: '#FFFFFF',
+                backgroundColor: activeTool === 'electrical' ? '#F59E0B' : (activeTool === 'hvac' ? currentDuctSys.color : (activeTool === 'plumbing' ? currentSys.color : '#1E293B')),
+                border: `1px solid ${activeTool === 'electrical' || activeTool === 'hvac' || activeTool === 'plumbing' ? '#FFFFFF' : '#475569'}`,
+                color: activeTool === 'electrical' ? '#0F172A' : '#FFFFFF',
                 fontWeight: 700,
                 fontSize: '11px',
                 cursor: 'pointer'
               }}
-              title={activeTool === 'hvac' ? "Commit and finalize duct route" : (activeTool === 'plumbing' ? "Commit and finalize pipe route" : "Finish current wall chain")}
+              title={activeTool === 'electrical' ? "Commit and finalize conduit route" : (activeTool === 'hvac' ? "Commit and finalize duct route" : (activeTool === 'plumbing' ? "Commit and finalize pipe route" : "Finish current wall chain"))}
             >
-              {activeTool === 'hvac' ? "✓ Finish Duct (Enter)" : (activeTool === 'plumbing' ? "✓ Finish Pipe (Enter)" : "Finish Wall (Enter)")}
+              {activeTool === 'electrical' ? "✓ Finish Conduit (Enter)" : (activeTool === 'hvac' ? "✓ Finish Duct (Enter)" : (activeTool === 'plumbing' ? "✓ Finish Pipe (Enter)" : "Finish Wall (Enter)"))}
             </button>
             <button
               type="button"
