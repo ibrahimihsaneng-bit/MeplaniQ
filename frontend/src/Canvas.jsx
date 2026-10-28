@@ -1021,6 +1021,7 @@ export default function Canvas({
   showElectrical = true,
   activeTool = 'select',
   selectedElectricalFixtureType = 'recessed_downlight',
+  onChangeElectricalFixtureType,
   scaleModeFixed = true,
   isResizeModeActive = false,
   onCursorMove, 
@@ -1282,6 +1283,12 @@ export default function Canvas({
   }, [draftingState, ductSystem, ductWidth, ductHeight, ductCfm, solveData, onLiveItemUpdate]);
 
   // ─── Electrical Conduit & Homerun State ────────────────────────────────────
+  const [internalElectricalFixtureType, setInternalElectricalFixtureType] = useState(selectedElectricalFixtureType || 'recessed_downlight');
+  const activeElectricalFixtureType = selectedElectricalFixtureType || internalElectricalFixtureType;
+  const handleElectricalFixtureTypeChange = useCallback((type) => {
+    setInternalElectricalFixtureType(type);
+    if (onChangeElectricalFixtureType) onChangeElectricalFixtureType(type);
+  }, [onChangeElectricalFixtureType]);
   const [electricalToolMode, setElectricalToolMode] = useState('component'); // 'component' | 'conduit' | 'homerun'
   const [conduitType, setConduitType] = useState('SLAB');
   const [wireGauge, setWireGauge] = useState('2.5');
@@ -2083,9 +2090,9 @@ export default function Canvas({
 
       if (electricalToolMode === 'component') {
         const pt = cadCursorPt || getSvgCoordinates(e);
-        const spec = ELECTRICAL_FIXTURES[selectedElectricalFixtureType] || ELECTRICAL_FIXTURES.recessed_downlight;
+        const spec = ELECTRICAL_FIXTURES[activeElectricalFixtureType] || ELECTRICAL_FIXTURES.recessed_downlight;
         onLiveItemUpdate?.('AddElectricalComponent', null, {
-          type: selectedElectricalFixtureType || 'recessed_downlight',
+          type: activeElectricalFixtureType || 'recessed_downlight',
           name: spec.label,
           category: spec.category,
           mounting: spec.mounting,
@@ -2410,7 +2417,7 @@ export default function Canvas({
             )}
             {solveData?.rooms?.map((room, idx) => {
               const pts = room.filleted_points || room.points || [];
-              const pointsStr = pts.map(p => `${p[0]},${p[1]}`).join(" ");
+              const pointsStr = pts.map(p => `${p[0] ?? p.x},${p[1] ?? p.y}`).join(" ");
               return (
                 <polygon
                   key={`room-poly-${idx}`}
@@ -2441,9 +2448,10 @@ export default function Canvas({
               const wallsToRender = hasCombined ? combinedWalls : solveData?.wall_polygons;
 
               return wallsToRender?.map((wall, idx) => {
-                const outerPts = wall.outer_polygon || [];
-                const outerStr = outerPts.map(p => `${p[0]} ${p[1]}`).join(" L ");
-                const innerStrs = wall.inner_polygons?.map(hole => `M ${hole.map(p => `${p[0]} ${p[1]}`).join(" L ")} Z`).join(" ") || "";
+                const outerPts = wall.outer_polygon || wall.polygon || (Array.isArray(wall) ? wall : []);
+                if (!outerPts || outerPts.length === 0) return null;
+                const outerStr = outerPts.map(p => `${p[0] ?? p.x} ${p[1] ?? p.y}`).join(" L ");
+                const innerStrs = wall.inner_polygons?.map(hole => `M ${hole.map(p => `${p[0] ?? p.x} ${p[1] ?? p.y}`).join(" L ")} Z`).join(" ") || "";
                 return (
                   <path
                     key={`wall-core-${wall.wall_type || 'poly'}-${idx}`}
@@ -4875,7 +4883,8 @@ export default function Canvas({
             }}
           >
             {solveData?.rooms?.map((room, idx) => {
-              const [cx, cy] = room.centroid || [0, 0];
+              const cx = Array.isArray(room.centroid) ? room.centroid[0] : (room.centroid?.x ?? 0);
+              const cy = Array.isArray(room.centroid) ? room.centroid[1] : (room.centroid?.y ?? 0);
               return (
                 <g key={`annotation-${idx}`} transform={`translate(${cx}, ${cy})`}>
                   <g transform={`scale(${1 / zoom}, ${-1 / zoom})`} style={{ pointerEvents: 'none', userSelect: 'none' }}>
@@ -5264,7 +5273,7 @@ export default function Canvas({
             wireGauge={wireGauge}
             activeCircuitId={activeCircuitId}
             nearestDbPort={nearestDbPort}
-            selectedElectricalFixtureType={selectedElectricalFixtureType}
+            selectedElectricalFixtureType={activeElectricalFixtureType}
             marqueeBox={marqueeBox}
             dimensionDraft={dimensionDraft}
             roomTagPreview={roomTagHover}
@@ -6092,8 +6101,8 @@ export default function Canvas({
         activeCircuitId={activeCircuitId}
         onChangeActiveCircuitId={setActiveCircuitId}
         electricalCircuits={electricalCircuits}
-        selectedElectricalFixtureType={selectedElectricalFixtureType}
-        onChangeElectricalFixtureType={setSelectedElectricalFixtureType}
+        selectedElectricalFixtureType={activeElectricalFixtureType}
+        onChangeElectricalFixtureType={handleElectricalFixtureTypeChange}
         multiSelection={multiSelection}
         onBatchDelete={handleBatchDelete}
         onClearSelection={handleClearSelection}

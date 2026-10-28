@@ -418,11 +418,17 @@ export default function EditorPage() {
 
     rooms.forEach(room => {
       const pts = room.filleted_points || room.points || [];
-      pts.forEach(([x, y]) => {
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
+      pts.forEach(p => {
+        const x = Array.isArray(p) ? p[0] : p?.x;
+        const y = Array.isArray(p) ? p[1] : p?.y;
+        if (typeof x === 'number' && !isNaN(x)) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+        }
+        if (typeof y === 'number' && !isNaN(y)) {
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
       });
     });
 
@@ -3253,6 +3259,7 @@ export default function EditorPage() {
                   showElectrical={showElectrical}
                   activeTool={activeTool}
                   selectedElectricalFixtureType={selectedElectricalFixtureType}
+                  onChangeElectricalFixtureType={setSelectedElectricalFixtureType}
                   scaleModeFixed={scaleModeFixed}
                   isResizeModeActive={isResizeModeActive}
                   onLiveItemUpdate={handleLiveItemUpdate}
