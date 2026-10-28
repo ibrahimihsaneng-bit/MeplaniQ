@@ -95,7 +95,9 @@ export default function CadStatusBar({
   onToggleRevClouds,
   showLegend = false,
   onToggleLegend,
-  onOpenDocStudio
+  onOpenDocStudio,
+  // OpenBIM IFC4 Studio (Cycle 26)
+  onOpenIfcStudio
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -1309,6 +1311,33 @@ export default function CadStatusBar({
           >
             <span>📑</span>
             <span>DOCS</span>
+          </button>
+        )}
+
+        {/* OPENBIM IFC4 STUDIO (Cycle 26) */}
+        {onOpenIfcStudio && (
+          <button
+            type="button"
+            onClick={onOpenIfcStudio}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '4px',
+              backgroundColor: '#0284C7',
+              border: '1px solid #38BDF8',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 0 10px rgba(56, 189, 248, 0.35)',
+              transition: 'all 0.15s ease'
+            }}
+            title="Open OpenBIM IFC4 Schema & Building Model Studio (ISO 16739-1:2018)"
+          >
+            <span>🏢</span>
+            <span>IFC4</span>
           </button>
         )}
       </div>

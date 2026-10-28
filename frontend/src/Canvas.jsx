@@ -1042,7 +1042,8 @@ export default function Canvas({
   onToggleRevClouds,
   showLegend = false,
   onToggleLegend,
-  onOpenDocStudio
+  onOpenDocStudio,
+  onOpenIfcStudio
 }) {
   const svgRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -6120,6 +6121,7 @@ export default function Canvas({
         showLegend={showLegend}
         onToggleLegend={onToggleLegend}
         onOpenDocStudio={onOpenDocStudio}
+        onOpenIfcStudio={onOpenIfcStudio}
       />
     </div>
   );

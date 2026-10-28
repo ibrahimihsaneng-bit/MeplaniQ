@@ -53,6 +53,7 @@ import AutoCadLispStudioModal from '../features/cad2d/AutoCadLispStudioModal';
 import ThermalZoneStudioModal from '../features/cad2d/ThermalZoneStudioModal';
 import ElectricalLoadPvStudioModal from '../features/cad2d/ElectricalLoadPvStudioModal';
 import ConstructionDocStudioModal from '../features/cad2d/ConstructionDocStudioModal';
+import OpenBimIfcStudioModal from '../features/cad2d/OpenBimIfcStudioModal';
 import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
 import { downloadIfc4Model } from '../features/mep/ifcExportBridge';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
@@ -110,6 +111,7 @@ export default function EditorPage() {
   const [showRevClouds, setShowRevClouds] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [isDocStudioOpen, setIsDocStudioOpen] = useState(false);
+  const [isIfcStudioOpen, setIsIfcStudioOpen] = useState(false);
 
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -2252,7 +2254,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={25} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={26} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2583,6 +2585,31 @@ export default function EditorPage() {
             title="Open Multi-Discipline Construction Documentation Studio (AIA / ISO 128 Standards & Master Sheet Index)"
           >
             <span>📑 Doc Studio</span>
+          </button>
+
+          {/* 🏢 OpenBIM IFC4 Studio (Cycle 26) */}
+          <button
+            onClick={() => setIsIfcStudioOpen(true)}
+            disabled={!solveData}
+            style={{
+              background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+              border: '1px solid #38BDF8',
+              color: '#FFFFFF',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(2, 132, 199, 0.4)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Open OpenBIM IFC4 Building Model Schema Studio (ISO 16739-1:2018)"
+          >
+            <span>🏢 IFC4 BIM</span>
           </button>
 
           {/* 🚰 Advanced Plumbing & Hydraulics Suite */}
@@ -3216,6 +3243,7 @@ export default function EditorPage() {
                   showLegend={showLegend}
                   onToggleLegend={() => setShowLegend(prev => !prev)}
                   onOpenDocStudio={() => setIsDocStudioOpen(true)}
+                  onOpenIfcStudio={() => setIsIfcStudioOpen(true)}
                   onCursorMove={setCursorCoords}
                   viewTransform={viewTransform}
                   setViewTransform={setViewTransform}
@@ -3457,6 +3485,14 @@ export default function EditorPage() {
         onToggleRevClouds={() => setShowRevClouds(prev => !prev)}
         showLegend={showLegend}
         onToggleLegend={() => setShowLegend(prev => !prev)}
+        projectName={solveData?.project_name || 'Floorplan'}
+      />
+
+      {/* OpenBIM IFC4 Building Model Schema Studio Modal (Cycle 26) */}
+      <OpenBimIfcStudioModal
+        isOpen={isIfcStudioOpen}
+        onClose={() => setIsIfcStudioOpen(false)}
+        solveData={solveData}
         projectName={solveData?.project_name || 'Floorplan'}
       />
 
