@@ -54,6 +54,7 @@ import ThermalZoneStudioModal from '../features/cad2d/ThermalZoneStudioModal';
 import ElectricalLoadPvStudioModal from '../features/cad2d/ElectricalLoadPvStudioModal';
 import ConstructionDocStudioModal from '../features/cad2d/ConstructionDocStudioModal';
 import OpenBimIfcStudioModal from '../features/cad2d/OpenBimIfcStudioModal';
+import CadBoqStudioModal from '../features/cad2d/CadBoqStudioModal';
 import { downloadAutoLispScript } from '../features/mep/autolispExportBridge';
 import { downloadIfc4Model } from '../features/mep/ifcExportBridge';
 import AutoCadClashDrawer from '../features/autocad/AutoCadClashDrawer';
@@ -112,6 +113,7 @@ export default function EditorPage() {
   const [showLegend, setShowLegend] = useState(false);
   const [isDocStudioOpen, setIsDocStudioOpen] = useState(false);
   const [isIfcStudioOpen, setIsIfcStudioOpen] = useState(false);
+  const [isBoqStudioOpen, setIsBoqStudioOpen] = useState(false);
 
   const [showGrid, setShowGrid] = useState(true);
   const [showDimensions, setShowDimensions] = useState(true);
@@ -2254,7 +2256,7 @@ export default function EditorPage() {
           </div>
 
           {/* Third Item: Live 24-Hour Autonomous Evolution Timer */}
-          <AutonomousSprintTimer currentCycle={26} totalHours={24} />
+          <AutonomousSprintTimer currentCycle={27} totalHours={24} />
         </div>
 
         {/* Center: Undo/Redo & Discipline Selector */}
@@ -2610,6 +2612,31 @@ export default function EditorPage() {
             title="Open OpenBIM IFC4 Building Model Schema Studio (ISO 16739-1:2018)"
           >
             <span>🏢 IFC4 BIM</span>
+          </button>
+
+          {/* 💰 2D Bill of Quantities (BOQ) Takeoff Studio (Cycle 27) */}
+          <button
+            onClick={() => setIsBoqStudioOpen(true)}
+            disabled={!solveData}
+            style={{
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+              border: '1px solid #34D399',
+              color: '#FFFFFF',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              borderRadius: '6px',
+              cursor: !solveData ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(5, 150, 105, 0.4)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            title="Open Commercial Bill of Quantities (BOQ) & Quantity Surveying Takeoff Studio (RICS NRM2 & CSI MasterFormat)"
+          >
+            <span>💰 BOQ Takeoff</span>
           </button>
 
           {/* 🚰 Advanced Plumbing & Hydraulics Suite */}
@@ -3244,6 +3271,7 @@ export default function EditorPage() {
                   onToggleLegend={() => setShowLegend(prev => !prev)}
                   onOpenDocStudio={() => setIsDocStudioOpen(true)}
                   onOpenIfcStudio={() => setIsIfcStudioOpen(true)}
+                  onOpenBoqStudio={() => setIsBoqStudioOpen(true)}
                   onCursorMove={setCursorCoords}
                   viewTransform={viewTransform}
                   setViewTransform={setViewTransform}
@@ -3492,6 +3520,14 @@ export default function EditorPage() {
       <OpenBimIfcStudioModal
         isOpen={isIfcStudioOpen}
         onClose={() => setIsIfcStudioOpen(false)}
+        solveData={solveData}
+        projectName={solveData?.project_name || 'Floorplan'}
+      />
+
+      {/* Commercial 2D Bill of Quantities (BOQ) Takeoff Studio Modal (Cycle 27) */}
+      <CadBoqStudioModal
+        isOpen={isBoqStudioOpen}
+        onClose={() => setIsBoqStudioOpen(false)}
         solveData={solveData}
         projectName={solveData?.project_name || 'Floorplan'}
       />

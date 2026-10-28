@@ -97,7 +97,9 @@ export default function CadStatusBar({
   onToggleLegend,
   onOpenDocStudio,
   // OpenBIM IFC4 Studio (Cycle 26)
-  onOpenIfcStudio
+  onOpenIfcStudio,
+  // 2D BOQ & Takeoff Studio (Cycle 27)
+  onOpenBoqStudio
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -1338,6 +1340,33 @@ export default function CadStatusBar({
           >
             <span>🏢</span>
             <span>IFC4</span>
+          </button>
+        )}
+
+        {/* 2D BILL OF QUANTITIES STUDIO (Cycle 27) */}
+        {onOpenBoqStudio && (
+          <button
+            type="button"
+            onClick={onOpenBoqStudio}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '4px',
+              backgroundColor: '#059669',
+              border: '1px solid #34D399',
+              color: '#FFFFFF',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 0 10px rgba(52, 211, 153, 0.35)',
+              transition: 'all 0.15s ease'
+            }}
+            title="Open Commercial Bill of Quantities (BOQ) & Quantity Takeoff Studio (RICS NRM2)"
+          >
+            <span>💰</span>
+            <span>BOQ</span>
           </button>
         )}
       </div>

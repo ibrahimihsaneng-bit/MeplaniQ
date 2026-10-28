@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
  * Displays real-time countdown to the next hourly automated engineering update
  * within the 24-hour autonomous development window.
  */
-export default function AutonomousSprintTimer({ currentCycle = 26, totalHours = 24 }) {
+export default function AutonomousSprintTimer({ currentCycle = 27, totalHours = 24 }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     const savedTarget = localStorage.getItem('meplaniq_sprint_target');
     const now = Date.now();
@@ -237,9 +237,21 @@ export default function AutonomousSprintTimer({ currentCycle = 26, totalHours = 
                 <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
-                      Cycle 26 (Hour 12): Native OpenBIM IFC4 Building Model Schema Exchange Studio
+                      Cycle 27 (Hour 13): Automated Bill of Quantities (BOQ) Takeoff &amp; Material Scheduling Engine
                     </span>
                     <span style={{ fontSize: '10px', color: '#34D399', fontWeight: 800 }}>LIVE</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                    RICS NRM2 &amp; CSI MasterFormat 2020 quantitative takeoff engine computing exact measured quantities for civil, architectural, finishes, HVAC, plumbing, and electrical installations with live currency conversions and Excel CSV export.
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: '#1E293B', padding: '10px 12px', borderRadius: '6px', borderLeft: '3px solid #10B981' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#F8FAFC' }}>
+                      Cycle 26 (Hour 12): Native OpenBIM IFC4 Building Model Schema Exchange Studio
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#10B981', fontWeight: 700 }}>✓ COMPLETED</span>
                   </div>
                   <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
                     Commercial ISO 16739-1:2018 OpenBIM IFC4 STEP physical compiler, translating 2D floorplans into full 3D extruded solids, spatial containment hierarchy, and MEP distribution segments for Autodesk Revit, ArchiCAD, Solibri, and BlenderBIM.
