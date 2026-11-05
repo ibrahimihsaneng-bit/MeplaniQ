@@ -3284,6 +3284,7 @@ export default function EditorPage() {
                   setViewTransform={setViewTransform}
                   selectedItem={selectedElement}
                   onSelectItem={setSelectedElement}
+                  onShowToast={showToast}
                 />
               </ErrorBoundary>
 

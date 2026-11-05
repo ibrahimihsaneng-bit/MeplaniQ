@@ -99,7 +99,12 @@ export default function CadStatusBar({
   // OpenBIM IFC4 Studio (Cycle 26)
   onOpenIfcStudio,
   // 2D BOQ & Takeoff Studio (Cycle 27)
-  onOpenBoqStudio
+  onOpenBoqStudio,
+  // Scientific Engineering Probe & Field Representation Modes (Award-Winning UI/UX)
+  probeActive = false,
+  onToggleProbe,
+  visualFieldMode = 'cad', // 'cad' | 'wireframe' | 'field'
+  onChangeVisualFieldMode
 }) {
   const isDrafting = draftingPointsCount > 0;
   const currentSys = PLUMBING_SYSTEMS[pipeSystem] || PLUMBING_SYSTEMS.CW;
@@ -1059,6 +1064,33 @@ export default function CadStatusBar({
           POLAR {polarActive ? 'ON' : 'OFF'}
         </button>
 
+        {/* SCIENTIFIC ENGINEERING PROBE (P) */}
+        {onToggleProbe && (
+          <button
+            type="button"
+            onClick={onToggleProbe}
+            style={{
+              padding: '3px 9px',
+              borderRadius: '4px',
+              backgroundColor: probeActive ? '#0284C7' : '#1E293B',
+              border: `1px solid ${probeActive ? '#38BDF8' : '#334155'}`,
+              color: probeActive ? '#FFFFFF' : '#94A3B8',
+              fontWeight: 700,
+              fontSize: '10.5px',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: probeActive ? '0 0 10px rgba(56, 189, 248, 0.4)' : 'none',
+              transition: 'all 0.15s ease'
+            }}
+            title="Toggle Scientific Engineering Measurement Probe & Physical Inspector [P]"
+          >
+            <span>🔬</span>
+            <span>PROBE {probeActive ? 'ON' : 'OFF'}</span>
+          </button>
+        )}
+
         {/* GRID Toggle (F7) */}
         <button
           type="button"
@@ -1287,6 +1319,73 @@ export default function CadStatusBar({
           >
             📋 LEGEND {showLegend ? 'ON' : 'OFF'}
           </button>
+        )}
+
+        {/* VISUAL FIELD REPRESENTATION MODE (Award-Winning UI/UX) */}
+        {onChangeVisualFieldMode && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              backgroundColor: '#1E293B',
+              borderRadius: '5px',
+              padding: '2px',
+              border: '1px solid #334155',
+              marginRight: '4px'
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => onChangeVisualFieldMode('cad')}
+              style={{
+                padding: '2px 7px',
+                borderRadius: '3px',
+                border: 'none',
+                backgroundColor: visualFieldMode === 'cad' ? '#2563EB' : 'transparent',
+                color: visualFieldMode === 'cad' ? '#FFFFFF' : '#94A3B8',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+              title="Classic CAD 2D Drafting Blueprint"
+            >
+              📐 CAD
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeVisualFieldMode('wireframe')}
+              style={{
+                padding: '2px 7px',
+                borderRadius: '3px',
+                border: 'none',
+                backgroundColor: visualFieldMode === 'wireframe' ? '#7C3AED' : 'transparent',
+                color: visualFieldMode === 'wireframe' ? '#FFFFFF' : '#94A3B8',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+              title="Spatial Wireframe Mesh & Clearance Envelopes"
+            >
+              🕸️ WIRE
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeVisualFieldMode('field')}
+              style={{
+                padding: '2px 7px',
+                borderRadius: '3px',
+                border: 'none',
+                backgroundColor: visualFieldMode === 'field' ? '#059669' : 'transparent',
+                color: visualFieldMode === 'field' ? '#FFFFFF' : '#94A3B8',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+              title="Scientific Simulation Field (Airflow Vectors, Thermal Gradients & Circuit Pulses)"
+            >
+              🌊 FIELD
+            </button>
+          </div>
         )}
 
         {/* CONSTRUCTION DOC STUDIO (Cycle 25) */}

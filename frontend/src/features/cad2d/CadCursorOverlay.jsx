@@ -71,7 +71,10 @@ export default function CadCursorOverlay({
   dimensionDraft = null,
   roomTagPreview = null,
   // 2D Clash Detection & Interference Props (Cycle 20)
-  detectedClashes = []
+  detectedClashes = [],
+  // Scientific Engineering Probe & Inspection (Award-Winning UI/UX)
+  probeActive = false,
+  probeData = null
 }) {
   const glyphSize = 14 / zoom;
   const halfGlyph = glyphSize / 2;
@@ -1261,6 +1264,64 @@ export default function CadCursorOverlay({
               </g>
             );
           })}
+        </g>
+      )}
+
+      {/* 9. SCIENTIFIC MEASUREMENT PROBE RETICLE & TARGETING HUD */}
+      {probeActive && cursorPt && (
+        <g id="SCIENTIFIC_PROBE_RETICLE" transform={`translate(${cursorPt.x}, ${cursorPt.y})`}>
+          {/* Outer Pulsing Radar Ring */}
+          <circle
+            cx="0"
+            cy="0"
+            r={24 / zoom}
+            fill="none"
+            stroke={probeData?.discipline?.color || "#38BDF8"}
+            strokeWidth={1.5 / zoom}
+            strokeDasharray={`${6 / zoom} ${4 / zoom}`}
+            opacity={0.85}
+          />
+
+          {/* Inner Precision Target Ring */}
+          <circle
+            cx="0"
+            cy="0"
+            r={10 / zoom}
+            fill={probeData?.discipline?.color ? `${probeData.discipline.color}22` : "rgba(56, 189, 248, 0.15)"}
+            stroke={probeData?.discipline?.color || "#38BDF8"}
+            strokeWidth={2 / zoom}
+          />
+
+          {/* Center Target Dot */}
+          <circle
+            cx="0"
+            cy="0"
+            r={2.5 / zoom}
+            fill="#FFFFFF"
+          />
+
+          {/* 4 Cardinal Precision Crosshair Ticks */}
+          <line x1={-32 / zoom} y1="0" x2={-14 / zoom} y2="0" stroke={probeData?.discipline?.color || "#38BDF8"} strokeWidth={1.5 / zoom} />
+          <line x1={14 / zoom} y1="0" x2={32 / zoom} y2="0" stroke={probeData?.discipline?.color || "#38BDF8"} strokeWidth={1.5 / zoom} />
+          <line x1="0" y1={-32 / zoom} x2="0" y2={-14 / zoom} stroke={probeData?.discipline?.color || "#38BDF8"} strokeWidth={1.5 / zoom} />
+          <line x1="0" y1={14 / zoom} x2="0" y2={32 / zoom} stroke={probeData?.discipline?.color || "#38BDF8"} strokeWidth={1.5 / zoom} />
+
+          {/* Real-Time Holographic Micro-Badge */}
+          <g transform={`translate(${18 / zoom}, ${-18 / zoom}) scale(${1 / zoom}, ${-1 / zoom})`}>
+            <rect
+              x="0"
+              y="-18"
+              width="135"
+              height="20"
+              rx="4"
+              fill="rgba(15, 23, 42, 0.92)"
+              stroke={probeData?.discipline?.color || "#38BDF8"}
+              strokeWidth="1.2"
+            />
+            <text x="6" y="-5" fill={probeData?.discipline?.color || "#38BDF8"} fontSize="8.5" fontWeight="800" fontFamily="monospace">
+              🔬 {probeData?.discipline?.name ? probeData.discipline.name.split(' ')[0].toUpperCase() : 'PROBE ACTIVE'}
+            </text>
+          </g>
         </g>
       )}
     </g>

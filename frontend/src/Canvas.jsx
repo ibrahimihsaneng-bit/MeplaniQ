@@ -69,6 +69,8 @@ import {
   generateProjectRevisionClouds,
   compileActiveDrawingLegend
 } from './features/cad2d/constructionDocEngine';
+import { detectProbeTarget } from './features/cad2d/engineeringProbeEngine';
+import EngineeringProbeHud from './features/cad2d/EngineeringProbeHud';
 
 function renderFurnitureShape(furn, fx, fy, fw, fh, bx, by, zoom, hasWarning) {
   const typeClean = (furn?.type || '').toLowerCase().trim();
@@ -1045,7 +1047,8 @@ export default function Canvas({
   onToggleLegend,
   onOpenDocStudio,
   onOpenIfcStudio,
-  onOpenBoqStudio
+  onOpenBoqStudio,
+  onShowToast
 }) {
   const svgRef = useRef(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -1500,6 +1503,12 @@ export default function Canvas({
     setInternalSelectedItem(null);
   }, [solveData?.plumbing_pipes, onLiveItemUpdate]);
 
+  // ─── Cycle 28: Award-Winning Scientific Engineering Probe & Representation Field ───
+  const [probeActive, setProbeActive] = useState(false);
+  const [probeData, setProbeData] = useState(null);
+  const [isProbePinned, setIsProbePinned] = useState(false);
+  const [visualFieldMode, setVisualFieldMode] = useState('cad'); // 'cad' | 'wireframe' | 'field'
+
   useEffect(() => {
     if (activeTool !== 'wall' && activeTool !== 'plumbing' && draftingState.active) {
       setDraftingState({ active: false, tool: null, points: [], isNearStart: false, startPort: null });
@@ -1580,8 +1589,26 @@ export default function Canvas({
           }
           return true;
         });
+      } else if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        setProbeActive(prev => {
+          const next = !prev;
+          if (!next) {
+            setProbeData(null);
+            setIsProbePinned(false);
+          }
+          if (onShowToast) {
+            onShowToast(next ? "🔬 Scientific Engineering Probe Active (Hover to inspect, Click to pin)" : "🔬 Scientific Probe Inactive", "info");
+          }
+          return next;
+        });
       } else if (e.key === 'Escape') {
-        if (multiSelection && multiSelection.length > 0) {
+        if (isProbePinned) {
+          setIsProbePinned(false);
+        } else if (probeActive) {
+          setProbeActive(false);
+          setProbeData(null);
+        } else if (multiSelection && multiSelection.length > 0) {
           setMultiSelection([]);
         } else if (dimensionDraft.step > 1) {
           setDimensionDraft({ step: 1, p1: null, p2: null, prevDim: null, unit: dimensionUnit });
@@ -1620,7 +1647,7 @@ export default function Canvas({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem, draftingState, handleCloseRoomLoop, handleFinishWallChain, handleFinishPipeRouting, handleFinishDuctRouting, handleFinishConduitRouting, handleCancelDrafting, showGrid, activeTool, pipeSystem, handlePipeSystemChange, snappedPort, hvacToolMode, electricalToolMode, snappedElectricalPort]);
+  }, [tapeMeasureActive, tapeStart, selectedItem, onLiveItemUpdate, setSelectedItem, draftingState, handleCloseRoomLoop, handleFinishWallChain, handleFinishPipeRouting, handleFinishDuctRouting, handleFinishConduitRouting, handleCancelDrafting, showGrid, activeTool, pipeSystem, handlePipeSystemChange, snappedPort, hvacToolMode, electricalToolMode, snappedElectricalPort, probeActive, isProbePinned, onShowToast]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -1710,6 +1737,19 @@ export default function Canvas({
     // Update marquee drag selection
     if (marqueeStart) {
       setMarqueeCurrent(effectivePt);
+    }
+
+    // Scientific Engineering Measurement Probe target detection
+    if (probeActive && !isProbePinned) {
+      const entities = {
+        pipes: solveData?.pipes || solveData?.plumbing_pipes || plumbingPipes || [],
+        ducts: solveData?.hvac_ducts || [],
+        conduits: solveData?.conduits || solveData?.electrical_routes || electricalRoutes || [],
+        rooms: solveData?.rooms || [],
+        walls: solveData?.walls || solveData?.wall_lines || []
+      };
+      const hit = detectProbeTarget(effectivePt, solveData, entities, 300 / zoom);
+      setProbeData(hit);
     }
 
     // Room tag hover detection when activeTool === 'room_tag'
@@ -1840,6 +1880,12 @@ export default function Canvas({
         setTapeEnd(pt);
         setTapeHover(null);
       }
+      return;
+    }
+
+    // Scientific Probe Click Pinning / Unpinning
+    if (probeActive && e.button === 0 && probeData) {
+      setIsProbePinned(prev => !prev);
       return;
     }
 
@@ -2456,10 +2502,23 @@ export default function Canvas({
                   <path
                     key={`wall-core-${wall.wall_type || 'poly'}-${idx}`}
                     d={`M ${outerStr} Z ${innerStrs}`}
-                    fill="#1E293B"
+                    fill={
+                      visualFieldMode === 'wireframe'
+                        ? 'rgba(30, 41, 59, 0.20)'
+                        : visualFieldMode === 'field'
+                          ? 'rgba(15, 23, 42, 0.88)'
+                          : '#1E293B'
+                    }
                     fillRule="evenodd"
-                    stroke="#FFFFFF"
-                    strokeWidth={1.5 / zoom}
+                    stroke={
+                      visualFieldMode === 'wireframe'
+                        ? '#38BDF8'
+                        : visualFieldMode === 'field'
+                          ? '#06B6D4'
+                          : '#FFFFFF'
+                    }
+                    strokeWidth={(visualFieldMode === 'wireframe' ? 1.2 : (visualFieldMode === 'field' ? 2 : 1.5)) / zoom}
+                    strokeDasharray={visualFieldMode === 'wireframe' ? `${8 / zoom} ${4 / zoom}` : 'none'}
                     strokeLinejoin="miter"
                   />
                 );
@@ -2473,8 +2532,9 @@ export default function Canvas({
                   key={`wall-line-${idx}`}
                   x1={line.x1} y1={line.y1}
                   x2={line.x2} y2={line.y2}
-                  stroke="#FFFFFF"
-                  strokeWidth={1.5 / zoom}
+                  stroke={visualFieldMode === 'wireframe' ? '#38BDF8' : (visualFieldMode === 'field' ? '#06B6D4' : '#FFFFFF')}
+                  strokeWidth={(visualFieldMode === 'wireframe' ? 1.2 : (visualFieldMode === 'field' ? 2 : 1.5)) / zoom}
+                  strokeDasharray={visualFieldMode === 'wireframe' ? `${8 / zoom} ${4 / zoom}` : 'none'}
                 />
               ))
             }
@@ -4109,9 +4169,18 @@ export default function Canvas({
                         <g key={`duct-seg-${duct.id || dIdx}-${sIdx}`}>
                           <polygon
                             points={polyPoints}
-                            fill={isDuctSelected ? "rgba(249, 115, 22, 0.40)" : currentDuctSys.fillColor}
-                            stroke={isDuctSelected ? "#FFFFFF" : ductColor}
-                            strokeWidth={(isDuctSelected ? 3.5 : 2) / zoom}
+                            fill={
+                              isDuctSelected
+                                ? "rgba(249, 115, 22, 0.40)"
+                                : (visualFieldMode === 'wireframe'
+                                    ? "rgba(14, 165, 233, 0.08)"
+                                    : (visualFieldMode === 'field'
+                                        ? "rgba(14, 165, 233, 0.30)"
+                                        : currentDuctSys.fillColor))
+                            }
+                            stroke={isDuctSelected ? "#FFFFFF" : (visualFieldMode === 'field' ? "#38BDF8" : ductColor)}
+                            strokeWidth={(isDuctSelected ? 3.5 : (visualFieldMode === 'field' ? 2.5 : 2)) / zoom}
+                            strokeDasharray={visualFieldMode === 'wireframe' ? `${8 / zoom} ${4 / zoom}` : 'none'}
                             strokeLinejoin="miter"
                           />
                           <line
@@ -4119,16 +4188,37 @@ export default function Canvas({
                             y1={prev[1]}
                             x2={pt[0]}
                             y2={pt[1]}
-                            stroke={ductColor}
+                            stroke={visualFieldMode === 'field' ? "#0EA5E9" : ductColor}
                             strokeWidth={1.2 / zoom}
                             strokeDasharray={`${80 / zoom} ${40 / zoom}`}
                           />
-                          {len > 300 && (
-                            <polygon
-                              points={`${ax},${ay} ${aLeftX},${aLeftY} ${aInnerX},${aInnerY} ${aRightX},${aRightY}`}
-                              fill={ductColor}
-                              opacity="0.85"
-                            />
+                          {visualFieldMode === 'field' ? (
+                            [0.3, 0.7].filter(() => len > 220).map((ratio, rIdx) => {
+                              const rx = prev[0] + ux * (len * ratio);
+                              const ry = prev[1] + uy * (len * ratio);
+                              const rlX = rx - ux * aLen * 0.7 - ny * aWidth * 0.6;
+                              const rlY = ry - uy * aLen * 0.7 + nx * aWidth * 0.6;
+                              const rrX = rx - ux * aLen * 0.7 + ny * aWidth * 0.6;
+                              const rrY = ry - uy * aLen * 0.7 - nx * aWidth * 0.6;
+                              const riX = rx - ux * (aLen * 0.35);
+                              const riY = ry - uy * (aLen * 0.35);
+                              return (
+                                <polygon
+                                  key={`pulse-arr-${rIdx}`}
+                                  points={`${rx},${ry} ${rlX},${rlY} ${riX},${riY} ${rrX},${rrY}`}
+                                  fill="#38BDF8"
+                                  opacity="0.95"
+                                />
+                              );
+                            })
+                          ) : (
+                            len > 300 && (
+                              <polygon
+                                points={`${ax},${ay} ${aLeftX},${aLeftY} ${aInnerX},${aInnerY} ${aRightX},${aRightY}`}
+                                fill={ductColor}
+                                opacity="0.85"
+                              />
+                            )
                           )}
                         </g>
                       );
@@ -5278,9 +5368,29 @@ export default function Canvas({
             dimensionDraft={dimensionDraft}
             roomTagPreview={roomTagHover}
             detectedClashes={detectedClashes}
+            probeActive={probeActive}
+            probeData={probeData}
           />
         </g>
       </svg>
+
+      {/* Award-Winning Scientific Engineering Measurement Probe HUD */}
+      {probeActive && probeData && (
+        <EngineeringProbeHud
+          probeData={probeData}
+          cursorCoords={cadCursorPt}
+          isPinned={isProbePinned}
+          onPinObservation={(data) => {
+            if (onShowToast) {
+              onShowToast(`📌 Pinned observation for ${data.title}: logged to field notebook!`, "success");
+            }
+          }}
+          onClose={() => {
+            setIsProbePinned(false);
+            setProbeData(null);
+          }}
+        />
+      )}
 
       {/* Floating Canvas Legend Tip */}
       {isResizeModeActive && (
@@ -6060,6 +6170,30 @@ export default function Canvas({
         onTogglePolar={() => setPolarActive(prev => !prev)}
         showGrid={internalShowGrid ?? showGrid}
         onToggleGrid={() => setInternalShowGrid(prev => !(prev ?? showGrid))}
+        probeActive={probeActive}
+        onToggleProbe={() => setProbeActive(prev => {
+          const next = !prev;
+          if (!next) {
+            setProbeData(null);
+            setIsProbePinned(false);
+          }
+          if (onShowToast) {
+            onShowToast(next ? "🔬 Scientific Engineering Probe Active (Hover to inspect, Click to pin)" : "🔬 Scientific Probe Inactive", "info");
+          }
+          return next;
+        })}
+        visualFieldMode={visualFieldMode}
+        onChangeVisualFieldMode={(mode) => {
+          setVisualFieldMode(mode);
+          if (onShowToast) {
+            const labels = {
+              cad: '📐 Technical CAD Drafting',
+              wireframe: '🕸️ Structural Wireframe & Sleeves',
+              field: '🌊 Dynamic Engineering Field'
+            };
+            onShowToast(`Representation: ${labels[mode] || mode}`, "info");
+          }
+        }}
         activeTool={activeTool}
         draftingPointsCount={draftingState.points?.length || 0}
         onFinishDrafting={
