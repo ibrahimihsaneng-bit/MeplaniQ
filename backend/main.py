@@ -72,11 +72,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for React frontend integration
+# Enable CORS for React frontend integration (Localhost, Vercel, Render)
+cors_env = os.environ.get("CORS_ORIGINS", "*")
+if cors_env.strip() == "*":
+    allowed_origins = ["*"]
+    allow_creds = False
+else:
+    allowed_origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+    allow_creds = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_creds,
     allow_methods=["*"],
     allow_headers=["*"],
 )
