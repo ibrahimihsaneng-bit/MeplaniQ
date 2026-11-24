@@ -1,0 +1,7 @@
+{
+  "name": "meplaniq",
+  "private": true,
+  "scripts": {
+    "build": "node build.js"
+  }
+}
