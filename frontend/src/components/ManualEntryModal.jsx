@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createManualProject } from "../api";
 
-export default function ManualEntryModal({ isOpen, onClose, onProjectCreated }) {
+export default function ManualEntryModal({ isOpen, onClose, onSuccess, onProjectCreated }) {
   if (!isOpen) return null;
 
   const [projectName, setProjectName] = useState("Custom Floorplan");
@@ -231,9 +231,12 @@ export default function ManualEntryModal({ isOpen, onClose, onProjectCreated }) 
     try {
       setSubmitting(true);
       const created = await createManualProject(payload);
-      if (onProjectCreated && created && created.project_id) {
+      if (onSuccess) {
+        onSuccess(created);
+      } else if (onProjectCreated && created && created.project_id) {
         onProjectCreated(created.project_id);
       }
+      if (onClose) onClose();
     } catch (err) {
       console.error("Manual Project creation error:", err);
       setFormError(err.message || "Failed to create project geometry.");

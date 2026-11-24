@@ -409,10 +409,28 @@ export function generateAreaProgramProposalLocal(params = {}) {
     });
   }
 
+  const formattedRooms = rooms.map((r) => {
+    const w = r.width_mm || 4000;
+    const d = r.height_mm || r.depth_mm || 3500;
+    const areaSqm = Math.round((w * d / 1000000) * 100) / 100;
+    const areaSqft = Math.round(areaSqm * 10.7639 * 10) / 10;
+    return {
+      name: r.name,
+      category: r.category || "General",
+      width_mm: w,
+      depth_mm: d,
+      height_mm: d,
+      area_sqm: areaSqm,
+      area_sqft: areaSqft,
+      target_area_sqft: r.target_area_sqft || areaSqft
+    };
+  });
+
   return {
     target_area_sqft: sqft,
-    total_program_sqft: rooms.reduce((sum, r) => sum + r.target_area_sqft, 0),
-    allocated_rooms: rooms
+    total_program_sqft: formattedRooms.reduce((sum, r) => sum + r.target_area_sqft, 0),
+    allocated_rooms: formattedRooms,
+    rooms: formattedRooms
   };
 }
 
@@ -420,8 +438,16 @@ export function generateAreaProgramProposalLocal(params = {}) {
  * Generate full Floorplan Project from Area program proposal in the browser.
  */
 export function generateProjectFromAreaLocal(payload = {}) {
-  const pName = payload.project_name || "AI Generated Floorplan";
-  const rawRooms = payload.allocated_rooms || [];
+  const pName = payload.name || payload.project_name || "AI Generated Floorplan";
+  const rawRooms = (Array.isArray(payload.rooms) && payload.rooms.length > 0)
+    ? payload.rooms
+    : (Array.isArray(payload.allocated_rooms) && payload.allocated_rooms.length > 0)
+      ? payload.allocated_rooms
+      : [
+          { name: "Living Room", width_mm: 5500, depth_mm: 4500 },
+          { name: "Master Bedroom", width_mm: 4200, depth_mm: 4000 },
+          { name: "Kitchen", width_mm: 3400, depth_mm: 3000 }
+        ];
 
   // Pack rooms into a 2D layout grid
   let currentX = 0;
@@ -431,7 +457,7 @@ export function generateProjectFromAreaLocal(payload = {}) {
 
   const placedRooms = rawRooms.map((r, idx) => {
     const w = Number(r.width_mm) || 4000;
-    const h = Number(r.height_mm) || 3500;
+    const h = Number(r.depth_mm || r.height_mm) || 3500;
 
     if (currentX + w > maxRowWidth && currentX > 0) {
       currentX = 0;
