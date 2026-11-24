@@ -38,15 +38,10 @@ def get_arc_angles(hinge: List[float], p1: List[float], p2: List[float]) -> Tupl
 def export_floorplan_to_dxf(solve_data: SolveResponse) -> bytes:
     """
     Generates a professional AutoCAD R2018 DXF drawing file conforming to AIA CAD Layer Standards.
-    
-    Layers:
-      - A-WALL-EXTR: 230 mm Exterior Walls (Color: White/Index 7, Lineweight: 0.50 mm, closed LWPOLYLINE)
-      - A-WALL-INTR: 115 mm Interior Partition Walls (Color: Cyan/Index 4, Lineweight: 0.35 mm, closed LWPOLYLINE)
-      - A-DOOR: Doors 90° Swing Arcs & Leaf Lines (Color: Yellow/Index 2, Lineweight: 0.25 mm)
-      - A-GLAZ: Window Sill, Glass Pane & Frame Lines (Color: Green/Index 3, Lineweight: 0.25 mm)
-      - A-AREA-TEXT: Room Labels & Carpet Area MTEXT (Color: Green/Index 3, Height: 180 mm)
-      - A-DIMS: CAD Dimension Lines, Extension Lines & Text (Color: Red/Index 1, Height: 120 mm)
     """
+    if isinstance(solve_data, dict):
+        solve_data = SolveResponse(**solve_data)
+
     # Initialize R2018 DXF document
     doc = ezdxf.new("R2018", setup=True)
 

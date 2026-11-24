@@ -157,3 +157,64 @@ def test_update_project_endpoint():
     # Test 404 on invalid project ID
     bad_put = client.put("/api/projects/non-existent-xyz", json=update_payload)
     assert bad_put.status_code == 404
+
+
+def test_rename_project_endpoint():
+    init_db()
+    saved = save_project("Original Name", {"rooms": []})
+    pid = saved["id"]
+
+    resp = client.patch(f"/api/projects/{pid}/rename", json={"name": "Renamed Floorplan"})
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Renamed Floorplan"
+
+    fetched = get_project_by_id(pid)
+    assert fetched["name"] == "Renamed Floorplan"
+
+    # Test 404 for invalid ID
+    bad_rename = client.patch("/api/projects/invalid-id/rename", json={"name": "Test"})
+    assert bad_rename.status_code == 404
+
+
+def test_duplicate_project_endpoint():
+    init_db()
+    test_payload = {
+        "rooms": [{"name": "Room A", "points": [[0, 0], [2000, 0], [2000, 2000], [0, 2000]]}],
+        "hvac_ducts": [{"duct_id": "D-1"}]
+    }
+    saved = save_project("Source Plan", test_payload)
+    pid = saved["id"]
+
+    resp = client.post(f"/api/projects/{pid}/duplicate", json={"name": "Source Plan Cloned"})
+    assert resp.status_code == 200
+    dup_data = resp.json()
+    assert dup_data["id"] != pid
+    assert dup_data["name"] == "Source Plan Cloned"
+
+    dup_fetched = get_project_by_id(dup_data["id"])
+    assert dup_fetched is not None
+    assert len(dup_fetched["cad_json_data"]["rooms"]) == 1
+    assert dup_fetched["cad_json_data"]["rooms"][0]["name"] == "Room A"
+
+
+def test_batch_delete_projects_endpoint():
+    init_db()
+    p1 = save_project("Batch 1", {"rooms": []})
+    p2 = save_project("Batch 2", {"rooms": []})
+
+    resp = client.post("/api/projects/batch-delete", json={"project_ids": [p1["id"], p2["id"]]})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"
+    assert resp.json()["deleted_count"] == 2
+
+    assert get_project_by_id(p1["id"]) is None
+    assert get_project_by_id(p2["id"]) is None
+
+
+def test_export_dxf_endpoint():
+    init_db()
+    resp = client.get("/api/projects/default-sample-1bhk/export-dxf")
+    assert resp.status_code == 200
+    assert "application/dxf" in resp.headers.get("content-type", "")
+    assert len(resp.content) > 100
+

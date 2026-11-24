@@ -545,3 +545,93 @@ export async function calculateBoqLive(cadData, qualityTier = "medium") {
 export function getProjectBoqPdfUrl(projectId, qualityTier = "medium") {
   return `${API_BASE_URL}/api/projects/${projectId}/export-boq-pdf?quality_tier=${encodeURIComponent(qualityTier)}`;
 }
+
+export async function renameProject(projectId, newName) {
+  const response = await fetch(`${API_BASE_URL}/api/projects/${encodeURIComponent(projectId)}/rename`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: newName }),
+  });
+  if (!response.ok) {
+    let errDetail = response.statusText;
+    try {
+      const errJson = await response.json();
+      if (errJson.detail) errDetail = errJson.detail;
+    } catch (_) {}
+    throw new Error(`Failed to rename project: ${errDetail}`);
+  }
+  return await response.json();
+}
+
+export async function duplicateProject(projectId, newName = null) {
+  const response = await fetch(`${API_BASE_URL}/api/projects/${encodeURIComponent(projectId)}/duplicate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: newName }),
+  });
+  if (!response.ok) {
+    let errDetail = response.statusText;
+    try {
+      const errJson = await response.json();
+      if (errJson.detail) errDetail = errJson.detail;
+    } catch (_) {}
+    throw new Error(`Failed to duplicate project: ${errDetail}`);
+  }
+  return await response.json();
+}
+
+export async function batchDeleteProjects(projectIds) {
+  const response = await fetch(`${API_BASE_URL}/api/projects/batch-delete`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ project_ids: projectIds }),
+  });
+  if (!response.ok) {
+    let errDetail = response.statusText;
+    try {
+      const errJson = await response.json();
+      if (errJson.detail) errDetail = errJson.detail;
+    } catch (_) {}
+    throw new Error(`Failed to batch delete projects: ${errDetail}`);
+  }
+  return await response.json();
+}
+
+export async function downloadProjectDxf(projectId, projectName = "Floorplan") {
+  const response = await fetch(`${API_BASE_URL}/api/projects/${encodeURIComponent(projectId)}/export-dxf`);
+  if (!response.ok) {
+    throw new Error(`DXF Export failed (${response.status}: ${response.statusText})`);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const safeName = (projectName || "Floorplan").replace(/[^a-zA-Z0-9_\-]/g, "_");
+  a.download = `${safeName}_Floorplan.dxf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function downloadProjectJson(projectId, projectName = "Floorplan") {
+  const data = await fetchProjectById(projectId);
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const safeName = (projectName || "Floorplan").replace(/[^a-zA-Z0-9_\-]/g, "_");
+  a.download = `${safeName}_CAD.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+

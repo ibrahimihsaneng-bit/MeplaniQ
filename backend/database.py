@@ -217,24 +217,160 @@ def seed_default_samples():
 
 
 def get_all_projects_summary() -> List[Dict[str, Any]]:
-    """Returns a summary list of all saved projects (id, name, created_at) ordered newest first."""
+    """Returns a rich summary list of all saved projects (id, name, created_at, room_count, area, disciplines, preview) ordered newest first."""
     init_db()
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, name, created_at FROM projects ORDER BY created_at DESC
+        SELECT id, name, created_at, cad_json_data FROM projects ORDER BY created_at DESC
     """)
     rows = cursor.fetchall()
     conn.close()
 
-    return [
-        {
+    summaries = []
+    for row in rows:
+        summary: Dict[str, Any] = {
             "id": row["id"],
             "name": row["name"],
-            "created_at": row["created_at"]
+            "created_at": row["created_at"],
+            "room_count": 0,
+            "total_area_sqm": 0.0,
+            "disciplines": ["Architecture"],
+            "preview_rooms": [],
+            "mep_counts": {
+                "hvac": 0,
+                "plumbing": 0,
+                "electrical": 0,
+                "furniture": 0
+            }
         }
-        for row in rows
-    ]
+        try:
+            raw_cad = row["cad_json_data"]
+            cad_data = json.loads(raw_cad) if raw_cad else {}
+            if isinstance(cad_data, dict):
+                rooms = cad_data.get("rooms", [])
+                summary["room_count"] = len(rooms)
+                
+                if cad_data.get("total_carpet_area_sqm"):
+                    summary["total_area_sqm"] = round(float(cad_data["total_carpet_area_sqm"]), 1)
+                elif cad_data.get("total_builtup_area_sqm"):
+                    summary["total_area_sqm"] = round(float(cad_data["total_builtup_area_sqm"]), 1)
+                else:
+                    summary["total_area_sqm"] = round(sum(float(r.get("area", r.get("area_sqm", 0.0))) for r in rooms), 1)
+
+                preview = []
+                for r in rooms[:10]:
+                    pts = r.get("points") or r.get("filleted_points") or []
+                    if pts and len(pts) >= 3:
+                        preview.append({
+                            "name": r.get("name", "Room"),
+                            "points": pts[:8]
+                        })
+                summary["preview_rooms"] = preview
+
+                disciplines = ["Architecture"]
+                hvac_count = len(cad_data.get("hvac_equipment", [])) + len(cad_data.get("hvac_ducts", []))
+                plumb_count = len(cad_data.get("plumbing_fixtures", [])) + len(cad_data.get("plumbing_pipes", []))
+                elec_count = len(cad_data.get("electrical_components", [])) + len(cad_data.get("electrical_routes", []))
+                furn_count = len(cad_data.get("furniture", []))
+
+                if hvac_count > 0:
+                    disciplines.append("HVAC")
+                if plumb_count > 0:
+                    disciplines.append("Plumbing")
+                if elec_count > 0:
+                    disciplines.append("Electrical")
+
+                summary["disciplines"] = disciplines
+                summary["mep_counts"] = {
+                    "hvac": hvac_count,
+                    "plumbing": plumb_count,
+                    "electrical": elec_count,
+                    "furniture": furn_count
+                }
+        except Exception:
+            pass
+
+        summaries.append(summary)
+
+    return summaries
+
+
+def rename_project(project_id: str, new_name: str) -> Optional[Dict[str, Any]]:
+    """Renames an existing project in SQLite and updates the internal CAD metadata."""
+    init_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, created_at, cad_json_data FROM projects WHERE id = ?", (project_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    try:
+        data = json.loads(row["cad_json_data"])
+        if isinstance(data, dict):
+            data["project_name"] = new_name
+            new_json_str = json.dumps(data)
+        else:
+            new_json_str = row["cad_json_data"]
+    except Exception:
+        new_json_str = row["cad_json_data"]
+
+    cursor.execute("UPDATE projects SET name = ?, cad_json_data = ? WHERE id = ?", (new_name, new_json_str, project_id))
+    conn.commit()
+    conn.close()
+    return {"id": project_id, "name": new_name, "created_at": row["created_at"]}
+
+
+def duplicate_project(project_id: str, new_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Duplicates an existing project with a unique UUID and cloned CAD JSON payload."""
+    init_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, created_at, cad_json_data FROM projects WHERE id = ?", (project_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    new_id = str(uuid.uuid4())
+    dup_name = new_name.strip() if new_name and new_name.strip() else f"{row['name']} (Copy)"
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    try:
+        data = json.loads(row["cad_json_data"])
+        if isinstance(data, dict):
+            data["project_id"] = new_id
+            data["project_name"] = dup_name
+            data["created_at"] = now_iso
+            new_json_str = json.dumps(data)
+        else:
+            new_json_str = row["cad_json_data"]
+    except Exception:
+        new_json_str = row["cad_json_data"]
+
+    cursor.execute("""
+        INSERT INTO projects (id, name, created_at, cad_json_data) VALUES (?, ?, ?, ?)
+    """, (new_id, dup_name, now_iso, new_json_str))
+    conn.commit()
+    conn.close()
+    return {"id": new_id, "name": dup_name, "created_at": now_iso}
+
+
+def batch_delete_projects(project_ids: List[str]) -> int:
+    """Deletes multiple projects from SQLite database by their IDs."""
+    if not project_ids:
+        return 0
+    init_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    placeholders = ",".join(["?"] * len(project_ids))
+    cursor.execute(f"DELETE FROM projects WHERE id IN ({placeholders})", project_ids)
+    deleted_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return deleted_count
 
 
 def get_project_by_id(project_id: str) -> Optional[Dict[str, Any]]:

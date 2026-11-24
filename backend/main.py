@@ -43,7 +43,10 @@ from backend.database import (
     get_db_furniture_catalog,
     get_catalog_item,
     save_project_boq,
-    get_project_boq
+    get_project_boq,
+    rename_project,
+    duplicate_project,
+    batch_delete_projects
 )
 from backend.services.area_to_plan import (
     generate_default_room_program,
@@ -158,6 +161,16 @@ def get_project(project_id: str):
     return cad_data
 
 
+class RenameProjectRequest(BaseModel):
+    name: str
+
+class DuplicateProjectRequest(BaseModel):
+    name: Optional[str] = None
+
+class BatchDeleteRequest(BaseModel):
+    project_ids: List[str]
+
+
 @app.delete("/api/projects/{project_id}")
 def delete_project_endpoint(project_id: str):
     """Deletes a saved project from the SQLite database."""
@@ -169,6 +182,44 @@ def delete_project_endpoint(project_id: str):
         "message": f"Project '{project_id}' deleted successfully.",
         "deleted_id": project_id
     }
+
+
+@app.patch("/api/projects/{project_id}/rename")
+def rename_project_endpoint(project_id: str, request: RenameProjectRequest):
+    """Renames an existing project by ID."""
+    clean_name = request.name.strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Project name cannot be empty.")
+    updated = rename_project(project_id, clean_name)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    return {
+        "status": "success",
+        "id": updated["id"],
+        "name": updated["name"],
+        "project": updated
+    }
+
+
+@app.post("/api/projects/{project_id}/duplicate")
+def duplicate_project_endpoint(project_id: str, request: DuplicateProjectRequest = Body(default=DuplicateProjectRequest())):
+    """Duplicates an existing project and generates a unique ID."""
+    duplicated = duplicate_project(project_id, request.name)
+    if not duplicated:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    return {
+        "status": "success",
+        "id": duplicated["id"],
+        "name": duplicated["name"],
+        "project": duplicated
+    }
+
+
+@app.post("/api/projects/batch-delete")
+def batch_delete_projects_endpoint(request: BatchDeleteRequest):
+    """Deletes multiple projects by their IDs."""
+    count = batch_delete_projects(request.project_ids)
+    return {"status": "success", "deleted_count": count, "project_ids": request.project_ids}
 
 
 @app.put("/api/projects/{project_id}", response_model=SolveResponse)
@@ -836,6 +887,22 @@ def solve_cad_geometry(request: SolveRequest):
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/projects/{project_id}/export-dxf")
+def export_project_dxf_endpoint(project_id: str):
+    """Generates and streams back an AutoCAD DXF drawing for an existing saved project by ID."""
+    proj = get_project_by_id(project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail=f"Project with ID '{project_id}' not found.")
+    cad_data = proj.get("cad_json_data", {})
+    dxf_bytes = export_floorplan_to_dxf(cad_data)
+    clean_name = "".join(c for c in proj.get("name", "Floorplan") if c.isalnum() or c in ("-", "_")).strip() or "Floorplan"
+    return Response(
+        content=dxf_bytes,
+        media_type="application/dxf",
+        headers={"Content-Disposition": f'attachment; filename="{clean_name}_Floorplan.dxf"'}
+    )
 
 
 @app.post("/api/export-dxf")
