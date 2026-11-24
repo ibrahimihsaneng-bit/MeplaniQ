@@ -17,9 +17,11 @@ services:
       - key: ENVIRONMENT
         value: production
 
-  # 2. Vite React Frontend Static Site (Optional alternative to Vercel)
-  - type: static
+  # 2. Vite React Frontend Static Site
+  - type: web
     name: meplaniq-frontend
+    runtime: static
+    plan: free
     buildCommand: "cd frontend && npm install && npm run build"
     staticPublishPath: "./frontend/dist"
     routes:
